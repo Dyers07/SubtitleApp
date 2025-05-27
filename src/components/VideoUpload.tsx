@@ -2,13 +2,14 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { toast } from "sonner";
 import { getAssemblyAI, AssemblyAIService } from '@/lib/assemblyai';
 import { Subtitle } from '@/types';
+import { Loader2 } from 'lucide-react';
 
 interface VideoUploadProps {
   onVideoProcessed: (videoUrl: string, videoDuration: number, subtitles: Subtitle[], width: number, height: number) => void;
@@ -56,13 +57,13 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onVideoProcessed }) =>
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
         const message = `Upload: ${uploadResponse.status} – ${errorText || 'Erreur inconnue'}`;
-        toast.error(message);      // feedback UX
-        console.warn(message);     // log dev
-        return;                    // stop ici, pas besoin de throw
+        toast.error(message);
+        console.warn(message);
+        return;
       }
       
       const { path: videoPath } = await uploadResponse.json();
-      const videoUrl = videoPath; // Utiliser le chemin public direct
+      const videoUrl = videoPath;
       setUploadProgress(30);
 
       // Uploader vers AssemblyAI
@@ -101,6 +102,9 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onVideoProcessed }) =>
         toast.success(`Vidéo traitée avec ${subtitles.length} sous-titres générés`);
 
         onVideoProcessed(videoUrl, duration, subtitles, width, height);
+
+        // Redirection après traitement
+        
       } catch (assemblyError) {
         console.error('AssemblyAI error:', assemblyError);
         throw new Error(`Erreur AssemblyAI: ${assemblyError instanceof Error ? assemblyError.message : 'Erreur inconnue'}`);
@@ -138,7 +142,7 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onVideoProcessed }) =>
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload de vidéo</CardTitle>
+        <CardTitle>Upload de vidéo 🎞️​</CardTitle>
         <CardDescription>
           Sélectionnez une vidéo MP4 pour générer automatiquement les sous-titres
         </CardDescription>
@@ -167,13 +171,20 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onVideoProcessed }) =>
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 ">
             <Button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              variant="outline"
+              className="bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-blue-400 cursor-pointer"
             >
-              Choisir une vidéo
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                "Choisir une vidéo"
+              )}
             </Button>
           </div>
         </div>
