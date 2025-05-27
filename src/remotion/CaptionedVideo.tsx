@@ -15,11 +15,12 @@ interface Word {
 }
 
 interface CaptionedVideoProps {
-  videoUrl: string;
+  videoUrl?: string;
   subtitles: Subtitle[];
   style: SubtitleStyle;
 }
 
+/* ───────────────── composant mot animé ─────────────────────────────── */
 const WordComponent: React.FC<{
   word: Word;
   frame: number;
@@ -27,13 +28,13 @@ const WordComponent: React.FC<{
   style: SubtitleStyle;
 }> = ({ word, frame, fps, style }) => {
   const start = word.start * fps;
-  const end = word.end * fps;
+  const end   = word.end   * fps;
   const active = frame >= start && frame <= end;
 
   return (
     <span
       style={{
-        opacity: active ? 1 : 0.3,
+        opacity:   active ? 1 : 0.3,
         transform: `scale(${active ? 1.1 : 1})`,
         transition: 'all 0.15s',
         marginRight: '0.3em',
@@ -46,15 +47,14 @@ const WordComponent: React.FC<{
         textShadow: style.shadowEnabled
           ? `0 0 ${style.shadowBlur}px ${style.shadowColor}`
           : undefined,
-        ...(style.neonEnabled &&
-          active && {
-            textShadow: `
-              0 0 ${style.neonIntensity}px ${style.neonColor},
-              0 0 ${style.neonIntensity * 2}px ${style.neonColor},
-              0 0 ${style.neonIntensity * 3}px ${style.neonColor}
-            `,
-            filter: 'brightness(1.3)',
-          }),
+        ...(style.neonEnabled && active && {
+          textShadow: `
+            0 0 ${style.neonIntensity}px ${style.neonColor},
+            0 0 ${style.neonIntensity * 2}px ${style.neonColor},
+            0 0 ${style.neonIntensity * 3}px ${style.neonColor}
+          `,
+          filter: 'brightness(1.3)',
+        }),
       }}
     >
       {word.text}
@@ -62,6 +62,7 @@ const WordComponent: React.FC<{
   );
 };
 
+/* ───────────────────── Composant principal ─────────────────────────── */
 export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
   videoUrl,
   subtitles,
@@ -70,9 +71,11 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const now = frame / fps;
-  const currentSub = subtitles.find((s) => now >= s.start && now <= s.end);
+  /* sous-titre courant ------------------------------------------------- */
+  const now         = frame / fps;
+  const currentSub  = subtitles.find((s) => now >= s.start && now <= s.end);
 
+  /* position du bloc de sous-titres ----------------------------------- */
   const posStyle = () => {
     switch (style.position) {
       case 'top':
@@ -84,14 +87,27 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     }
   };
 
-  const src =
-    /^https?:\/\//.test(videoUrl) || videoUrl.startsWith('/')
-      ? videoUrl
-      : staticFile(videoUrl);
+  /* URL vidéo utilisable par Remotion --------------------------------- */
+  const src = React.useMemo(() => {
+    if (!videoUrl) return '';
 
+    // 1. URLs absolues http(s) – on les laisse intactes
+    if (/^https?:\/\//.test(videoUrl)) return videoUrl;
+
+    // 2. Chemins Next.js "/uploads/…" ou "uploads/…"  ->  /static/uploads/…
+    const trimmed = videoUrl.replace(/^\/+/, '');      // retire les éventuels '/'
+    if (trimmed.startsWith('uploads/')) {
+      return staticFile(trimmed);                      // => /static/uploads/…
+    }
+
+    // 3. Tout autre chemin relatif passe aussi par staticFile
+    return staticFile(trimmed);
+  }, [videoUrl]);
+
+  /* ------------------------------------------------------------------- */
   return (
     <AbsoluteFill>
-      {videoUrl ? (
+      {src ? (
         <Video
           src={src}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -101,6 +117,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
           onError={(err) => console.error('Video playback error:', err)}
         />
       ) : (
+        /* Fallback si aucune vidéo ------------------------------------- */
         <AbsoluteFill
           style={{
             backgroundColor: '#000',
@@ -119,6 +136,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
         </AbsoluteFill>
       )}
 
+      {/* Bloc de sous-titres ------------------------------------------- */}
       {currentSub && (
         <AbsoluteFill
           style={{

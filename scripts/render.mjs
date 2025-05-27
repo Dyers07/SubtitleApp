@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 export async function renderVideo(projectData) {
   try {
     console.log('Starting Remotion render...');
-    
+
     // Créer le dossier output s'il n'existe pas
     const outputDir = path.join(__dirname, '..', 'public', 'output');
     await fs.mkdir(outputDir, { recursive: true });
@@ -18,28 +18,6 @@ export async function renderVideo(projectData) {
     // Bundle Remotion
     const bundleLocation = await bundle({
       entryPoint: path.join(__dirname, '..', 'src', 'remotion', 'index.tsx'),
-      // Utiliser esbuild au lieu de webpack pour éviter les conflits
-      webpackOverride: (config) => ({
-        ...config,
-        module: {
-          ...config.module,
-          rules: [
-            ...config.module.rules.filter(rule => !rule.test?.toString().includes('tsx?')),
-            {
-              test: /\.tsx?$/,
-              use: [
-                {
-                  loader: 'esbuild-loader',
-                  options: {
-                    loader: 'tsx',
-                    target: 'es2015',
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      }),
     });
 
     // Sélectionner la composition
@@ -64,7 +42,7 @@ export async function renderVideo(projectData) {
 
     // Rendre la vidéo
     const outputPath = path.join(outputDir, `${projectData.id}.mp4`);
-    
+
     await renderMedia({
       composition: adjustedComposition,
       serveUrl: bundleLocation,
@@ -79,7 +57,7 @@ export async function renderVideo(projectData) {
 
     console.log('Render complete:', outputPath);
     return `/output/${projectData.id}.mp4`;
-    
+
   } catch (error) {
     console.error('Render error:', error);
     throw error;

@@ -1,77 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import { mkdir, access } from 'fs/promises';
+import { spawn } from 'child_process';
 
-const execAsync = promisify(exec);
-
-/**
- * Mémoire éphémère : id → { path, mimeType }
- * (remplace par une persistance réelle en prod).
- */
-const videoMetadata = new Map<string, { path: string; mimeType: string }>();
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    /* ─ 1. Projet reçu ────────────────────────────────────────────────── */
-    const project = (await request.json()) as {
-      id: string;
-      videoUrl: string;
-      [k: string]: unknown;
-    };
-    console.log('▶︎ Remotion render – project:', project.id);
+    /* ─ 1. Charger les données du projet ──────────────────────────────── */
+    const project = await req.json();
 
-    /* ─ 2. Dossier de sortie ──────────────────────────────────────────── */
-    const outputDir = path.join(process.cwd(), 'public', 'output');
-    await mkdir(outputDir, { recursive: true });
+    /* ─ 2. Créer le dossier de sortie public/output/ ──────────────────── */
+    const outDir = path.join(process.cwd(), 'public', 'output');
+    await mkdir(outDir, { recursive: true });
 
-    /* ─ 3. Résolution de videoUrl ─────────────────────────────────────── */
-    let videoPath = project.videoUrl; // ex: "/uploads/foo.mp4"
+    /* ─ 3. Lancer render.mjs sans passer par le shell ─────────────────── */
+    const script = path.join(process.cwd(), 'scripts', 'render.mjs');
+    const child  = spawn(
+      process.execPath,                         // ex. "node"
+      [script, JSON.stringify(project)],        // argv[2] = JSON
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
 
-    // 3-a) vidéo servie par /api/video/<id>
-    if (videoPath.startsWith('/api/video/')) {
-      const id = videoPath.split('/').pop()!;
-      const meta = videoMetadata.get(id);
-      videoPath = meta?.path ?? `${request.nextUrl.origin}${videoPath}`;
-    }
-
-    // 3-b) vidéo déjà dans public/uploads → "uploads/foo.mp4"
-    if (videoPath.startsWith('/uploads/')) {
-      videoPath = videoPath.slice(1);
-      // vérifie que le fichier existe réellement
-      await access(path.join(process.cwd(), 'public', videoPath));
-    }
-
-    const projectForRender = { ...project, videoUrl: videoPath };
-    console.log('  JSON ➜ Remotion:\n', JSON.stringify(projectForRender, null, 2));
-
-    /* ─ 4. Lancer Remotion ────────────────────────────────────────────── */
-    const scriptPath = path.join(process.cwd(), 'scripts', 'render.mjs');
-    const jsonArg = JSON.stringify(projectForRender).replace(/'/g, "\\'");
-    const command = `node "${scriptPath}" '${jsonArg}'`;
-
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: process.cwd(),             // ← racine projet, donc public/ visible
-      maxBuffer: 10 * 1024 * 1024,
+    // On bufferise la sortie pour l’envoyer au client en cas d’erreur
+    let out = '';
+    child.stdout.on('data', (d) => {
+      const s = d.toString();
+      out += s;
+      console.log(s.trim());                    // journal live
+    });
+    child.stderr.on('data', (d) => {
+      const s = d.toString();
+      out += s;
+      console.error(s.trim());
     });
 
-    if (stderr) console.error('stderr:', stderr.trim());
-    if (stdout) console.log('stdout:', stdout.trim());
+    const code: number = await new Promise((res, rej) => {
+      child.on('error', rej);
+      child.on('close', res);
+    });
 
-    /* ─ 5. Vérification MP4 ───────────────────────────────────────────── */
-    const mp4Path = path.join(outputDir, `${project.id}.mp4`);
-    await access(mp4Path); // throw si absent
+    if (code !== 0) {
+      throw new Error(`render.mjs exited with code ${code}\n\n${out}`);
+    }
+
+    /* ─ 4. Vérifier que la vidéo existe ───────────────────────────────── */
+    const fileName = `${project.id}.mp4`;
+    const filePath = path.join(outDir, fileName);
+    await access(filePath);
 
     return NextResponse.json({
       success: true,
-      downloadUrl: `/output/${project.id}.mp4`,
+      downloadUrl: `/output/${fileName}`,
     });
   } catch (err) {
     console.error('Render error:', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Render failed' },
-      { status: 500 },
+      {
+        error:
+          err instanceof Error ? err.message : 'Render failed – see server log',
+      },
+      { status: 500 }
     );
   }
 }
