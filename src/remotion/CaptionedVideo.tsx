@@ -8,61 +8,12 @@ import {
 } from 'remotion';
 import { Subtitle, SubtitleStyle } from '@/types';
 
-interface Word {
-  text: string;
-  start: number;
-  end: number;
-}
-
 interface CaptionedVideoProps {
-  videoUrl?: string;
+  videoUrl: string;
   subtitles: Subtitle[];
   style: SubtitleStyle;
 }
 
-/* ───────────────── composant mot animé ─────────────────────────────── */
-const WordComponent: React.FC<{
-  word: Word;
-  frame: number;
-  fps: number;
-  style: SubtitleStyle;
-}> = ({ word, frame, fps, style }) => {
-  const start = word.start * fps;
-  const end   = word.end   * fps;
-  const active = frame >= start && frame <= end;
-
-  return (
-    <span
-      style={{
-        opacity:   active ? 1 : 0.3,
-        transform: `scale(${active ? 1.1 : 1})`,
-        transition: 'all 0.15s',
-        marginRight: '0.3em',
-        display: 'inline-block',
-        color: style.color,
-        fontWeight: style.fontWeight,
-        fontStyle: style.fontStyle,
-        textDecoration: style.textDecoration,
-        textTransform: style.textTransform as any,
-        textShadow: style.shadowEnabled
-          ? `0 0 ${style.shadowBlur}px ${style.shadowColor}`
-          : undefined,
-        ...(style.neonEnabled && active && {
-          textShadow: `
-            0 0 ${style.neonIntensity}px ${style.neonColor},
-            0 0 ${style.neonIntensity * 2}px ${style.neonColor},
-            0 0 ${style.neonIntensity * 3}px ${style.neonColor}
-          `,
-          filter: 'brightness(1.3)',
-        }),
-      }}
-    >
-      {word.text}
-    </span>
-  );
-};
-
-/* ───────────────────── Composant principal ─────────────────────────── */
 export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
   videoUrl,
   subtitles,
@@ -70,136 +21,161 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const currentTime = frame / fps;
 
-  /* sous-titre courant ------------------------------------------------- */
-  const now         = frame / fps;
-  const currentSub  = subtitles.find((s) => now >= s.start && now <= s.end);
+  const currentSub = subtitles.find(
+    (sub) => currentTime >= sub.start && currentTime <= sub.end
+  );
 
-  /* position du bloc de sous-titres ----------------------------------- */
-  const posStyle = () => {
+  const getPositionStyle = (): React.CSSProperties => {
+    const base = {
+      left: 0,
+      right: 0,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: '0 20px',
+    };
+    const oY = style.offsetY ?? 0;
     switch (style.position) {
       case 'top':
-        return { top: `${style.offsetY}px` };
+        return { ...base, top: `${20 + oY}px`, bottom: 'auto' };
       case 'middle':
-        return { top: '50%', transform: 'translateY(-50%)' };
+        return {
+          ...base,
+          top: '50%',
+          transform: `translateY(calc(-50% + ${oY}px))`,
+          bottom: 'auto',
+        };
       default:
-        return { bottom: `${style.offsetY}px` };
+        return { ...base, bottom: `${20 + oY}px`, top: 'auto' };
     }
   };
 
-  /* URL vidéo utilisable par Remotion --------------------------------- */
-  const src = React.useMemo(() => {
-    if (!videoUrl) return '';
+  const getTextStyle = (isActive: boolean): React.CSSProperties => {
+    const s: React.CSSProperties = {
+      transition: 'all 0.15s',
+      display: 'inline-block',
+      color: style.color,
+      fontSize: `${style.fontSize}px`,
+      fontFamily: style.fontFamily,
+      lineHeight: style.lineHeight,
+      fontWeight: style.fontWeight,
+      textTransform: style.textTransform,
+    };
 
-    // 1. URLs absolues http(s) – on les laisse intactes
-    if (/^https?:\/\//.test(videoUrl)) return videoUrl;
-
-    // 2. Chemins Next.js "/uploads/…" ou "uploads/…"  ->  /static/uploads/…
-    const trimmed = videoUrl.replace(/^\/+/, '');      // retire les éventuels '/'
-    if (trimmed.startsWith('uploads/')) {
-      return staticFile(trimmed);                      // => /static/uploads/…
+    if (style.animation) {
+      s.opacity = isActive ? 1 : 0.3;
+      s.transform = isActive ? 'scale(1.1)' : 'scale(1)';
     }
 
-    // 3. Tout autre chemin relatif passe aussi par staticFile
-    return staticFile(trimmed);
-  }, [videoUrl]);
+    if (style.shadow !== 'none') {
+      const map = {
+        small: '1px 1px 2px rgba(0, 0, 0, 0.5)',
+        medium: '2px 2px 4px rgba(0, 0, 0, 0.7)',
+        large: '3px 3px 6px rgba(0, 0, 0, 0.9)',
+      };
+      s.textShadow = map[style.shadow] || map.medium;
+    }
 
-  /* ------------------------------------------------------------------- */
+    return s;
+  };
+
+  const addEmojis = (text: string): string => {
+    if (!style.autoEmojis) return text;
+    const emojiMap: Record<string, string> = {
+      happy: '😊',
+      heureux: '😊',
+      sad: '😢',
+      triste: '😢',
+      love: '❤️',
+      amour: '❤️',
+      laugh: '😂',
+      rire: '😂',
+      wow: '😮',
+      super: '🎉',
+      merci: '🙏',
+      thanks: '🙏',
+    };
+    return Object.entries(emojiMap).reduce(
+      (acc, [word, emoji]) =>
+        acc.replace(new RegExp(`\\b${word}\\b`, 'gi'), `$& ${emoji}`),
+      text
+    );
+  };
+
   return (
     <AbsoluteFill>
-      {src ? (
+      {videoUrl ? (
         <Video
-          src={src}
+          src={videoUrl}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          volume={1}
-          playsInline
-          crossOrigin="anonymous"
-          onError={(err) => console.error('Video playback error:', err)}
         />
       ) : (
-        /* Fallback si aucune vidéo ------------------------------------- */
         <AbsoluteFill
           style={{
             backgroundColor: '#000',
-            color: '#fff',
-            fontFamily: 'Arial',
             display: 'flex',
-            flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
+            color: '#fff',
+            fontSize: '24px',
           }}
         >
-          <p style={{ fontSize: 24 }}>Aucune vidéo chargée</p>
-          <p style={{ fontSize: 16, opacity: 0.7 }}>
-            Uploadez une vidéo depuis l&rsquo;interface principale
-          </p>
+          <div style={{ textAlign: 'center' }}>
+            <p>Aucune vidéo chargée</p>
+            <p style={{ fontSize: '16px', opacity: 0.7 }}>
+              Uploadez une vidéo depuis l'interface principale
+            </p>
+          </div>
         </AbsoluteFill>
       )}
 
-      {/* Bloc de sous-titres ------------------------------------------- */}
       {currentSub && (
-        <AbsoluteFill
-          style={{
-            left: 0,
-            right: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: '0 20px',
-            ...posStyle(),
-          }}
-        >
+        <AbsoluteFill style={getPositionStyle()}>
           <div
             style={{
-              maxWidth: '90%',
-              textAlign: 'center',
-              lineHeight: 1.4,
-              fontSize: `${style.fontSize}px`,
-              fontFamily: style.fontFamily,
-              backgroundColor: `${style.backgroundColor}${Math.floor(
-                style.backgroundOpacity * 255,
-              )
-                .toString(16)
-                .padStart(2, '0')}`,
+              backgroundColor: style.backgroundColor,
+              opacity: style.backgroundOpacity,
               padding: `${style.padding}px ${style.padding * 1.5}px`,
               borderRadius: `${style.borderRadius}px`,
-              boxShadow: style.shadowEnabled
-                ? `0 2px ${style.shadowBlur}px ${style.shadowColor}`
-                : undefined,
+              maxWidth: '90%',
+              textAlign: 'center',
             }}
           >
-            {currentSub.words ? (
-              currentSub.words.map((w, i) => (
-                <WordComponent
-                  key={`${currentSub.id}-${i}`}
-                  word={w}
-                  frame={frame}
-                  fps={fps}
-                  style={style}
-                />
-              ))
+            {currentSub.words && currentSub.words.length > 0 ? (
+              currentSub.words.map((word, i) => {
+                const startF = word.start * fps;
+                const endF = word.end * fps;
+                const active = frame >= startF && frame <= endF;
+                const txt = style.autoEmojis ? addEmojis(word.text) : word.text;
+                return (
+                  <span
+                    key={`${currentSub.id}-${i}`}
+                    style={{
+                      ...getTextStyle(active),
+                      marginRight: '0.3em',
+                      ...(word.color && {
+                        backgroundColor:
+                          word.color === 'yellow'
+                            ? '#fbbf24'
+                            : word.color === 'green'
+                            ? '#34d399'
+                            : '#f87171',
+                        padding: '0 4px',
+                        borderRadius: '2px',
+                      }),
+                    }}
+                  >
+                    {txt}
+                  </span>
+                );
+              })
             ) : (
-              <span
-                style={{
-                  color: style.color,
-                  fontWeight: style.fontWeight,
-                  fontStyle: style.fontStyle,
-                  textDecoration: style.textDecoration,
-                  textTransform: style.textTransform as any,
-                  textShadow: style.shadowEnabled
-                    ? `0 0 ${style.shadowBlur}px ${style.shadowColor}`
-                    : undefined,
-                  ...(style.neonEnabled && {
-                    textShadow: `
-                      0 0 ${style.neonIntensity}px ${style.neonColor},
-                      0 0 ${style.neonIntensity * 2}px ${style.neonColor},
-                      0 0 ${style.neonIntensity * 3}px ${style.neonColor}
-                    `,
-                    filter: 'brightness(1.3)',
-                  }),
-                }}
-              >
-                {currentSub.text}
+              <span style={getTextStyle(true)}>
+                {style.autoEmojis
+                  ? addEmojis(currentSub.text)
+                  : currentSub.text}
               </span>
             )}
           </div>

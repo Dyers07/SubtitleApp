@@ -10,7 +10,8 @@ const __dirname = path.dirname(__filename);
 export async function renderVideo(projectData) {
   try {
     console.log('Starting Remotion render...');
-
+    console.log('Video FPS:', projectData.fps);
+    
     // Créer le dossier output s'il n'existe pas
     const outputDir = path.join(__dirname, '..', 'public', 'output');
     await fs.mkdir(outputDir, { recursive: true });
@@ -18,6 +19,27 @@ export async function renderVideo(projectData) {
     // Bundle Remotion
     const bundleLocation = await bundle({
       entryPoint: path.join(__dirname, '..', 'src', 'remotion', 'index.tsx'),
+      webpackOverride: (config) => ({
+        ...config,
+        module: {
+          ...config.module,
+          rules: [
+            ...config.module.rules.filter(rule => !rule.test?.toString().includes('tsx?')),
+            {
+              test: /\.tsx?$/,
+              use: [
+                {
+                  loader: 'esbuild-loader',
+                  options: {
+                    loader: 'tsx',
+                    target: 'es2015',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
     });
 
     // Sélectionner la composition
@@ -31,25 +53,34 @@ export async function renderVideo(projectData) {
       },
     });
 
-    // Ajuster la composition avec les dimensions de la vidéo
+    // Ajuster la composition avec les dimensions et FPS de la vidéo
     const adjustedComposition = {
       ...composition,
       width: projectData.width,
       height: projectData.height,
-      fps: projectData.fps,
+      fps: projectData.fps, // Utiliser le FPS de la vidéo source
       durationInFrames: Math.floor(projectData.videoDuration * projectData.fps),
     };
 
     // Rendre la vidéo
     const outputPath = path.join(outputDir, `${projectData.id}.mp4`);
-
+    
     await renderMedia({
       composition: adjustedComposition,
       serveUrl: bundleLocation,
-      enableAudio: true,
       outputLocation: outputPath,
       codec: 'h264',
-      inputProps: projectData,
+      // Paramètres de qualité pour éviter les freezes
+      videoBitrate: '8M',
+      encodingBufferSize: 10000,
+      encodingMaxRate: '10M',
+      crf: 18, // Qualité élevée
+      pixelFormat: 'yuv420p',
+      inputProps: {
+        videoUrl: projectData.videoUrl,
+        subtitles: projectData.subtitles,
+        style: projectData.style,
+      },
       onProgress: ({ progress }) => {
         console.log(`Render progress: ${Math.round(progress * 100)}%`);
       },
@@ -57,7 +88,7 @@ export async function renderVideo(projectData) {
 
     console.log('Render complete:', outputPath);
     return `/output/${projectData.id}.mp4`;
-
+    
   } catch (error) {
     console.error('Render error:', error);
     throw error;

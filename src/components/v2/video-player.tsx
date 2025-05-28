@@ -1,3 +1,4 @@
+// src/components/v2/video-player.tsx
 'use client';
 
 import React, {
@@ -19,9 +20,15 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { CaptionedVideo } from '@/remotion/CaptionedVideo';
 import { VideoProject } from '@/types';
+import { VideoControls } from '@/components/v2/video-controls-enhanced';
 
 /** Format MM:SS.sss */
 const fmt = (s: number) =>
@@ -116,41 +123,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!document.fullscreenElement) {
       containerRef.current
         .requestFullscreen()
-        .then(() => {})
-        .catch((err) => {
-          console.error(`Error attempting to enable fullscreen: ${err.message}`);
-        });
+        .catch((err) => console.error(`Cannot enable fullscreen: ${err.message}`));
     } else {
-      document
-        .exitFullscreen()
-        .then(() => {})
-        .catch((err) => {
-          console.error(`Error attempting to exit fullscreen: ${err.message}`);
-        });
+      document.exitFullscreen().catch((err) => console.error(`Cannot exit fullscreen: ${err.message}`));
     }
   };
 
   return (
     <TooltipProvider>
       <div className="flex flex-col h-full bg-white">
-        {/* En-tête avec boutons Preview, Colors, Audio */}
-        <div className="flex justify-center border-b border-gray-200 p-2">
-          <Button variant="ghost" className="px-4 py-1 text-sm font-medium text-gray-800 bg-gray-100 rounded-md">
-            Preview
-          </Button>
-          <Button
-            variant="ghost"
-            className="px-4 py-1 text-sm font-medium text-gray-600 ml-2 hover:bg-gray-50 rounded-md flex items-center"
-          >
-            <span className="text-blue-500 mr-1">⚡</span> Colors
-          </Button>
-          <Button
-            variant="ghost"
-            className="px-4 py-1 text-sm font-medium text-gray-600 ml-2 hover:bg-gray-50 rounded-md flex items-center"
-          >
-            <span className="mr-1">🎵</span> Audio
-          </Button>
-        </div>
+        {/* Contrôles avancés: Preview, Colors, Audio */}
+        <VideoControls
+          onBrightnessChange={() => {}}
+          onContrastChange={() => {}}
+          onSaturationChange={() => {}}
+          onAudioFileSelect={() => {}}
+          onAudioVolumeChange={() => {}}
+          brightness={100}
+          contrast={100}
+          saturation={100}
+          audioVolume={50}
+        />
 
         {/* Conteneur principal */}
         <div
@@ -162,10 +155,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         >
           <div
             className="relative bg-black rounded-2xl overflow-hidden w-full max-w-[360px] mx-auto shadow-lg"
-            style={{
-              aspectRatio: "9/16",
-              height: "auto",
-            }}
+            style={{ aspectRatio: '9/16', height: 'auto' }}
           >
             {/* Player Remotion */}
             <Player
@@ -195,7 +185,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         </div>
 
-        {/* Contrôles vidéo */}
+        {/* Contrôles vidéo classiques */}
         <div className="bg-white border-t border-gray-200">
           <div className="h-1 bg-gray-200 relative mx-2">
             <Slider
@@ -210,7 +200,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
           <div className="flex items-center justify-between p-2">
             <div className="flex items-center">
-              <Button variant="ghost" size="icon" onClick={togglePlay} className="p-1 text-gray-700 hover:text-gray-900">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={togglePlay}
+                className="p-1 text-gray-700 hover:text-gray-900"
+              >
                 {playing ? <Pause size={18} /> : <Play size={18} />}
               </Button>
               <div className="text-xs text-gray-700 ml-2">
@@ -221,7 +216,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <div className="flex items-center space-x-3">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={onReset} className="p-1 text-gray-700 hover:text-gray-900">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onReset}
+                    className="p-1 text-gray-700 hover:text-gray-900"
+                  >
                     <RefreshCw size={16} />
                   </Button>
                 </TooltipTrigger>
@@ -268,7 +268,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant={isHidden ? "secondary" : "outline"}
+                      variant={isHidden ? 'secondary' : 'outline'}
                       size="sm"
                       onClick={() => setIsHidden(!isHidden)}
                       className="text-xs font-medium h-7"

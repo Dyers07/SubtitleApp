@@ -1,285 +1,266 @@
-// src/components/v2/edit-captions.tsx
-"use client"
-import React, { useState, useEffect } from "react"
-import {
-  RefreshCw,
-  Edit2,
-  Trash2,
-  MoreHorizontal,
-  Plus,
-  Check,
-  X,
-} from "lucide-react"
-import type { SubtitleSegment } from "@/types"
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu"
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Edit2, Trash2, Plus, ChevronDown } from 'lucide-react';
+import { SubtitleSegment, Word } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface EditCaptionsProps {
-  subtitles: SubtitleSegment[]
-  selectedSubtitle: string | null
-  setSelectedSubtitle: (id: string | null) => void
-  updateSubtitle: (id: string, updates: Partial<SubtitleSegment>) => void
+  segments: SubtitleSegment[];
+  currentTime: number;
+  onUpdateSubtitle: (id: string, update: Partial<SubtitleSegment>) => void;
+  onDeleteSubtitle: (id: string) => void;
+  onMoveToNext: (id: string) => void;
 }
 
 export function EditCaptions({
-  subtitles,
-  selectedSubtitle,
-  setSelectedSubtitle,
-  updateSubtitle,
+  segments,
+  currentTime,
+  onUpdateSubtitle,
+  onDeleteSubtitle,
+  onMoveToNext,
 }: EditCaptionsProps) {
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editText, setEditText] = useState<string>("")
-  const [wordTimes, setWordTimes] = useState<
-    Record<string, { start: number; end: number }[]>
-  >({})
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [hoveredWord, setHoveredWord] = useState<{ segmentId: string; wordIndex: number } | null>(null);
+  const [selectedWord, setSelectedWord] = useState<{ segmentId: string; wordIndex: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (editingId) {
-      const seg = subtitles.find((s) => s.id === editingId)
-      setEditText(seg ? seg.text : "")
+    const activeIndex = segments.findIndex(
+      (seg) => currentTime >= seg.startTime && currentTime <= seg.endTime
+    );
+    if (activeIndex !== -1 && scrollRef.current) {
+      const el = scrollRef.current.querySelector(`[data-segment-index="${activeIndex}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [editingId, subtitles])
+  }, [currentTime, segments]);
 
-  useEffect(() => {
-    const times: typeof wordTimes = {}
-    subtitles.forEach((seg) => {
-      const words = seg.text.split(/\s+/)
-      const duration = seg.endTime - seg.startTime
-      const per = duration / Math.max(1, words.length)
-      times[seg.id] = words.map((_, i) => ({
-        start: seg.startTime + per * i,
-        end: seg.startTime + per * (i + 1),
-      }))
-    })
-    setWordTimes(times)
-  }, [subtitles])
+  const formatTime = (seconds: number): string => {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
-  const handleDeleteSegment = (seg: SubtitleSegment) => {
-    updateSubtitle(seg.id, { text: "", endTime: seg.startTime })
-  }
+  const updateWord = (segmentId: string, wordIndex: number, updates: Partial<Word>) => {
+    const seg = segments.find((s) => s.id === segmentId);
+    if (!seg?.words) return;
+    const newWords = [...seg.words];
+    newWords[wordIndex] = { ...newWords[wordIndex], ...updates };
+    const newText = newWords.map((w) => w.text).join(' ');
+    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
+  };
 
-  const handleSaveEdit = (seg: SubtitleSegment) => {
-    const newWords = editText.trim().split(/\s+/).filter(Boolean)
-    const duration = seg.endTime - seg.startTime
-    const per = duration / Math.max(1, newWords.length)
-    updateSubtitle(seg.id, {
-      text: editText,
-      startTime: seg.startTime,
-      endTime: seg.startTime + per * newWords.length,
-    })
-    setEditingId(null)
-  }
+  const deleteWord = (segmentId: string, wordIndex: number) => {
+    const seg = segments.find((s) => s.id === segmentId);
+    if (!seg?.words) return;
+    const newWords = seg.words.filter((_, i) => i !== wordIndex);
+    const newText = newWords.map((w) => w.text).join(' ');
+    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
+  };
 
-  const handleDeleteWord = (seg: SubtitleSegment, idx: number) => {
-    const words = seg.text.split(/\s+/).filter(Boolean)
-    const newWords = words.filter((_, i) => i !== idx)
-    const duration = seg.endTime - seg.startTime
-    const per = duration / Math.max(1, newWords.length)
-    updateSubtitle(seg.id, {
-      text: newWords.join(" "),
-      endTime: seg.startTime + per * newWords.length,
-    })
-  }
+  const addWord = (segmentId: string, afterIndex: number) => {
+    const seg = segments.find((s) => s.id === segmentId);
+    if (!seg?.words) return;
+    const w = prompt('Nouveau mot :')?.trim();
+    if (!w) return;
+    const newWords = [...seg.words];
+    const prev = newWords[afterIndex];
+    const next = newWords[afterIndex + 1];
+    const start = prev?.end ?? seg.startTime;
+    const end = next?.start ?? start + 0.3;
+    newWords.splice(afterIndex + 1, 0, { text: w, start, end, confidence: 1 });
+    const newText = newWords.map((x) => x.text).join(' ');
+    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
+  };
 
-  const handleHighlightColor = (
-    seg: SubtitleSegment,
-    idx: number,
-    color: 'none' | 'green' | 'yellow' | 'red'
-  ) => {
-    const prev = Array.isArray(seg.style?.highlightWords) ? seg.style?.highlightWords : []
-    const next = [...prev]
-    next[idx] = color
-    updateSubtitle(seg.id, {
-      style: { ...seg.style, highlightWords: next },
-    })
-  }
+  const splitIntoNewLine = (segmentId: string, idx: number) => {
+    alert('Split à gérer dans le parent');
+  };
 
-  const handleTimeChange = (
-    seg: SubtitleSegment,
-    idx: number,
-    start: number,
-    end: number
-  ) => {
-    const times = wordTimes[seg.id].slice()
-    times[idx] = { start, end }
-    setWordTimes({ ...wordTimes, [seg.id]: times })
-    const newStart = Math.min(...times.map((t) => t.start))
-    const newEnd = Math.max(...times.map((t) => t.end))
-    updateSubtitle(seg.id, { startTime: newStart, endTime: newEnd })
-  }
+  const addLineBreak = (segmentId: string, idx: number) => {
+    const seg = segments.find((s) => s.id === segmentId);
+    if (!seg?.words) return;
+    const newWords = [...seg.words];
+    newWords[idx] = { ...newWords[idx], lineBreak: true };
+    const newText = newWords
+      .map((w, i) =>
+        w.text + (w.lineBreak ? '\n' : i < newWords.length - 1 ? ' ' : '')
+      )
+      .join('');
+    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
+  };
+
+  const setWordColor = (segmentId: string, idx: number, color: Word['color'] | null) => {
+    updateWord(segmentId, idx, { color: color ?? undefined });
+  };
+
+  const updateTiming = (segmentId: string, field: 'startTime' | 'endTime', val: number) => {
+    onUpdateSubtitle(segmentId, { [field]: val });
+  };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 flex justify-between items-center border-b border-gray-200">
-        <div className="text-sm font-medium text-gray-700">Précision sous-titres IA</div>
-        <div className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">
-          99.73%
-        </div>
+    <Card className="h-full flex flex-col">
+      <div className="p-4 border-b">
+        <h3 className="font-semibold">Éditer les sous-titres</h3>
       </div>
-
-      <div className="flex-1 overflow-auto">
-        {subtitles.map((subtitle) => {
-          const isSelected = selectedSubtitle === subtitle.id
-          const isEditing = editingId === subtitle.id
-          const words = subtitle.text.split(/\s+/).filter(Boolean)
+      <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-2">
+        {segments.map((seg, ix) => {
+          const active = currentTime >= seg.startTime && currentTime <= seg.endTime;
+          const editing = editingId === seg.id;
           return (
             <div
-              key={subtitle.id}
-              className={`px-4 py-3 border-b border-gray-100 flex flex-col ${
-                isSelected ? "bg-blue-50" : "hover:bg-gray-50"
-              }`}
-              onClick={() => {
-                setSelectedSubtitle(subtitle.id)
-              }}
+              key={seg.id}
+              data-segment-index={ix}
+              className={cn(
+                'p-3 rounded-lg border',
+                active ? 'bg-primary/10 border-primary/50' : 'bg-muted/50'
+              )}
             >
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-gray-500">
-                  {subtitle.startTime.toFixed(2)} - {subtitle.endTime.toFixed(2)}
-                </div>
-                <div className="flex space-x-1">
-                  {isEditing ? (
-                    <>
-                      <button
-                        onClick={() => handleSaveEdit(subtitle)}
-                        className="p-1 text-green-500 hover:bg-green-100 rounded"
-                      >
-                        <Check size={16} />
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="p-1 text-red-500 hover:bg-red-100 rounded"
-                      >
-                        <X size={16} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setEditingId(subtitle.id)}
-                        className="p-1 text-gray-500 hover:bg-gray-100 rounded"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSegment(subtitle)}
-                        className="p-1 text-gray-500 hover:bg-gray-100 rounded"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <button className="p-1 text-gray-500 hover:bg-gray-100 rounded">
-                        <MoreHorizontal size={16} />
-                      </button>
-                    </>
-                  )}
+              <div className="flex justify-between mb-2">
+                <span className="text-sm text-muted-foreground">
+                  {formatTime(seg.startTime)} – {formatTime(seg.endTime)}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingId(editing ? null : seg.id)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDeleteSubtitle(seg.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-
-              {isEditing ? (
-                <textarea
-                  className="mt-2 w-full p-2 border border-gray-300 rounded"
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  rows={2}
-                />
-              ) : (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {words.map((word, idx) => {
-                    const times = wordTimes[subtitle.id]?.[idx] || {
-                      start: subtitle.startTime,
-                      end: subtitle.endTime,
+              {editing ? (
+                <>
+                  <textarea
+                    className="w-full p-2 border rounded min-h-[60px]"
+                    value={seg.text}
+                    onChange={(e) =>
+                      onUpdateSubtitle(seg.id, { text: e.target.value })
                     }
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      type="number"
+                      value={seg.startTime}
+                      onChange={(e) =>
+                        updateTiming(seg.id, 'startTime', parseFloat(e.target.value))
+                      }
+                      step={0.1}
+                      className="w-24"
+                    />
+                    <Input
+                      type="number"
+                      value={seg.endTime}
+                      onChange={(e) =>
+                        updateTiming(seg.id, 'endTime', parseFloat(e.target.value))
+                      }
+                      step={0.1}
+                      className="w-24"
+                    />
+                    <Button onClick={() => setEditingId(null)}>OK</Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {seg.words && seg.words.length > 0 ? (
+                    seg.words.map((w, wi) => (
+                      <div key={wi} className="inline-flex items-center">
+                        <span
+                          className={cn(
+                            'px-1 py-0.5 rounded cursor-pointer',
+                            hoveredWord?.segmentId === seg.id &&
+                              hoveredWord.wordIndex === wi
+                              ? 'bg-primary/20'
+                              : 'hover:bg-primary/10',
+                            w.color && `text-${w.color}-600 bg-${w.color}-100`,
+                            selectedWord?.segmentId === seg.id &&
+                              selectedWord.wordIndex === wi
+                              ? 'ring-2 ring-primary'
+                              : ''
+                          )}
+                          onMouseEnter={() =>
+                            setHoveredWord({ segmentId: seg.id, wordIndex: wi })
+                          }
+                          onMouseLeave={() => setHoveredWord(null)}
+                          onClick={() =>
+                            setSelectedWord({ segmentId: seg.id, wordIndex: wi })
+                          }
+                        >
+                          {w.text}
+                        </span>
 
-                    const highlight = Array.isArray(subtitle.style?.highlightWords)
-                      ? subtitle.style?.highlightWords[idx] ?? 'none'
-                      : 'none'
+                        {selectedWord?.segmentId === seg.id &&
+                          selectedWord.wordIndex === wi && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="ml-1 p-0 h-6 w-6"
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, null)}>
+                                  Aucune couleur
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, 'green')}>
+                                  Vert
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, 'yellow')}>
+                                  Jaune
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, 'red')}>
+                                  Rouge
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => addLineBreak(seg.id, wi)}>
+                                  Saut de ligne
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => splitIntoNewLine(seg.id, wi)}>
+                                  Split ligne
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => addWord(seg.id, wi)}>
+                                  <Plus className="h-3 w-3 mr-1" /> Ajouter mot
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => deleteWord(seg.id, wi)}>
+                                  <Trash2 className="h-3 w-3 mr-1" /> Supprimer
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
 
-                    return (
-                      <DropdownMenu key={idx}>
-                        <DropdownMenuTrigger asChild>
-                          <span
-                            className={`px-1 rounded cursor-pointer hover:bg-gray-100 ${
-                              highlight !== 'none' ? `bg-${highlight}-200` : ""
-                            }`}
-                          >
-                            {word}
-                          </span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuRadioGroup
-                            value={highlight}
-                            onValueChange={(value) => {
-                              if (
-                                value === "none" ||
-                                value === "green" ||
-                                value === "yellow" ||
-                                value === "red"
-                              ) {
-                                handleHighlightColor(subtitle, idx, value)
-                              }
-                            }}
-                          >
-                            <DropdownMenuRadioItem value="none">None</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="green">Green</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="yellow">Yellow</DropdownMenuRadioItem>
-                            <DropdownMenuRadioItem value="red">Red</DropdownMenuRadioItem>
-                          </DropdownMenuRadioGroup>
-                          <div className="px-2 py-1 flex space-x-2">
-                            <input
-                              type="number"
-                              className="w-16 p-1 border rounded"
-                              value={times.start.toFixed(2)}
-                              onChange={(e) =>
-                                handleTimeChange(
-                                  subtitle,
-                                  idx,
-                                  parseFloat(e.target.value),
-                                  times.end
-                                )
-                              }
-                            />
-                            <input
-                              type="number"
-                              className="w-16 p-1 border rounded"
-                              value={times.end.toFixed(2)}
-                              onChange={(e) =>
-                                handleTimeChange(
-                                  subtitle,
-                                  idx,
-                                  times.start,
-                                  parseFloat(e.target.value)
-                                )
-                              }
-                            />
-                          </div>
-                          <DropdownMenuItem onSelect={() => {}}>Add line break</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => {}}>Move to next line</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => {}}>Split into new line</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => {}}>Add sound</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => {}}>Add word</DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => handleDeleteWord(subtitle, idx)}>
-                            Remove word
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )
-                  })}
+                        {w.lineBreak && <br />}
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground">{seg.text}</span>
+                  )}
                 </div>
               )}
             </div>
-          )
+          );
         })}
-        <div className="flex justify-center py-4">
-          <button className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-50">
-            <Plus size={16} />
-          </button>
-        </div>
       </div>
-    </div>
-  )
+    </Card>
+  );
 }
