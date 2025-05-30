@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { Palette, Music, Upload } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 interface VideoControlsProps {
@@ -55,53 +54,75 @@ export function VideoControls({
     { name: 'Ambient Nature', url: '/audio/ambient-nature.mp3' },
   ];
 
+  const resetColorSettings = () => {
+    onBrightnessChange(100);
+    onContrastChange(100);
+    onSaturationChange(100);
+  };
+
   return (
-    <div className="flex gap-2">
-      {/* Colors Dropdown */}
+    <div className="flex justify-center gap-2">
+      {/* Colors Dropdown avec fond assorti */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Palette className="h-4 w-4 mr-1" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="px-3 py-1.5 text-xs font-medium bg-white/70 hover:bg-white/90 border border-white/50 rounded-full shadow-sm transition-all duration-200"
+          >
+            <span className="mr-1.5">🎨</span>
             Colors
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-72 p-4">
+        <DropdownMenuContent className="w-80 p-4" align="end">
           <DropdownMenuLabel>Ajustements vidéo</DropdownMenuLabel>
           <DropdownMenuSeparator />
           
           <div className="space-y-4">
             <div>
-              <Label className="text-sm">Luminosité ({brightness}%)</Label>
+              <Label className="text-sm font-medium">
+                Luminosité ({brightness}%)
+              </Label>
               <Slider
                 value={[brightness]}
-                onValueChange={(value) => onBrightnessChange(value[0])}
+                onValueChange={(value) => {
+                  onBrightnessChange(value[0]);
+                }}
                 min={0}
                 max={200}
-                step={10}
+                step={5}
                 className="mt-2"
               />
             </div>
             
             <div>
-              <Label className="text-sm">Contraste ({contrast}%)</Label>
+              <Label className="text-sm font-medium">
+                Contraste ({contrast}%)
+              </Label>
               <Slider
                 value={[contrast]}
-                onValueChange={(value) => onContrastChange(value[0])}
+                onValueChange={(value) => {
+                  onContrastChange(value[0]);
+                }}
                 min={0}
                 max={200}
-                step={10}
+                step={5}
                 className="mt-2"
               />
             </div>
             
             <div>
-              <Label className="text-sm">Saturation ({saturation}%)</Label>
+              <Label className="text-sm font-medium">
+                Saturation ({saturation}%)
+              </Label>
               <Slider
                 value={[saturation]}
-                onValueChange={(value) => onSaturationChange(value[0])}
+                onValueChange={(value) => {
+                  onSaturationChange(value[0]);
+                }}
                 min={0}
                 max={200}
-                step={10}
+                step={5}
                 className="mt-2"
               />
             </div>
@@ -109,11 +130,7 @@ export function VideoControls({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                onBrightnessChange(100);
-                onContrastChange(100);
-                onSaturationChange(100);
-              }}
+              onClick={resetColorSettings}
               className="w-full"
             >
               Réinitialiser
@@ -122,22 +139,26 @@ export function VideoControls({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Audio Dropdown */}
+      {/* Audio Dropdown avec fond assorti */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Music className="h-4 w-4 mr-1" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="px-3 py-1.5 text-xs font-medium bg-white/70 hover:bg-white/90 border border-white/50 rounded-full shadow-sm transition-all duration-200"
+          >
+            <span className="mr-1.5">🎵</span>
             Audio
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-72 p-4">
+        <DropdownMenuContent className="w-80 p-4" align="end">
           <DropdownMenuLabel>Musique de fond</DropdownMenuLabel>
           <DropdownMenuSeparator />
           
           <div className="space-y-4">
             {/* Upload custom audio */}
             <div>
-              <Label className="text-sm">Importer une musique</Label>
+              <Label className="text-sm font-medium">Importer une musique</Label>
               <div className="mt-2">
                 <Input
                   type="file"
@@ -148,7 +169,7 @@ export function VideoControls({
               </div>
               {audioFile && (
                 <p className="text-sm text-muted-foreground mt-1">
-                  {audioFile.name}
+                  📁 {audioFile.name}
                 </p>
               )}
             </div>
@@ -157,7 +178,7 @@ export function VideoControls({
             
             {/* Music library */}
             <div>
-              <Label className="text-sm">Bibliothèque musicale</Label>
+              <Label className="text-sm font-medium">Bibliothèque musicale</Label>
               <div className="mt-2 space-y-1">
                 {musicLibrary.map((track) => (
                   <Button
@@ -173,10 +194,13 @@ export function VideoControls({
                           const file = new File([blob], track.name, { type: 'audio/mpeg' });
                           setAudioFile(file);
                           onAudioFileSelect(file);
+                        })
+                        .catch(() => {
+                          console.warn(`Fichier audio non trouvé: ${track.url}`);
                         });
                     }}
                   >
-                    {track.name}
+                    🎼 {track.name}
                   </Button>
                 ))}
               </div>
@@ -186,7 +210,9 @@ export function VideoControls({
             
             {/* Volume control */}
             <div>
-              <Label className="text-sm">Volume musique ({audioVolume}%)</Label>
+              <Label className="text-sm font-medium">
+                Volume musique ({audioVolume}%)
+              </Label>
               <Slider
                 value={[audioVolume]}
                 onValueChange={(value) => onAudioVolumeChange(value[0])}

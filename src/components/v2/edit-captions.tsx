@@ -1,26 +1,31 @@
+// src/components/v2/edit-captions.tsx
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
-import { Edit2, Trash2, Plus, ChevronDown } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmojiPicker } from '@/components/ui/emoji-picker';
+import { Trash2, Edit3, Smile } from 'lucide-react';
 import { SubtitleSegment, Word } from '@/types';
-import { cn } from '@/lib/utils';
+import { formatTime } from '@/lib/utils';
+import { calculateAverageConfidence } from '@/utils/calculate-confidence';
 
 interface EditCaptionsProps {
   segments: SubtitleSegment[];
   currentTime: number;
-  onUpdateSubtitle: (id: string, update: Partial<SubtitleSegment>) => void;
+  onUpdateSubtitle: (id: string, updates: Partial<SubtitleSegment>) => void;
   onDeleteSubtitle: (id: string) => void;
-  onMoveToNext: (id: string) => void;
+  onMoveToNext: () => void;
+}
+
+interface WordEditDialog {
+  open: boolean;
+  segmentId: string;
+  wordIndex: number;
+  word: Word | null;
 }
 
 export function EditCaptions({
@@ -28,232 +33,298 @@ export function EditCaptions({
   currentTime,
   onUpdateSubtitle,
   onDeleteSubtitle,
-  onMoveToNext,
 }: EditCaptionsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [hoveredWord, setHoveredWord] = useState<{ segmentId: string; wordIndex: number } | null>(null);
-  const [selectedWord, setSelectedWord] = useState<{ segmentId: string; wordIndex: number } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [editText, setEditText] = useState('');
+  const [wordDialog, setWordDialog] = useState<WordEditDialog>({
+    open: false,
+    segmentId: '',
+    wordIndex: -1,
+    word: null,
+  });
 
-  useEffect(() => {
-    const activeIndex = segments.findIndex(
-      (seg) => currentTime >= seg.startTime && currentTime <= seg.endTime
-    );
-    if (activeIndex !== -1 && scrollRef.current) {
-      const el = scrollRef.current.querySelector(`[data-segment-index="${activeIndex}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // 🎯 Calcul de la précision moyenne
+  const averageConfidence = React.useMemo(() => {
+    const allWords = segments.flatMap(seg => seg.words || []);
+    return calculateAverageConfidence(allWords);
+  }, [segments]);
+
+  const handleEditStart = (segment: SubtitleSegment) => {
+    setEditingId(segment.id);
+    setEditText(segment.text);
+  };
+
+  const handleEditSave = (segmentId: string) => {
+    onUpdateSubtitle(segmentId, { text: editText });
+    setEditingId(null);
+    setEditText('');
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditText('');
+  };
+
+  const handleWordClick = (segmentId: string, wordIndex: number, word: Word) => {
+    setWordDialog({
+      open: true,
+      segmentId,
+      wordIndex,
+      word: { ...word },
+    });
+  };
+
+  const handleWordUpdate = () => {
+    if (!wordDialog.word) return;
+
+    const segment = segments.find(s => s.id === wordDialog.segmentId);
+    if (!segment?.words) return;
+
+    const updatedWords = [...segment.words];
+    updatedWords[wordDialog.wordIndex] = wordDialog.word;
+
+    // Recalculer le texte du segment
+    const newText = updatedWords.map(w => w.text).join(' ');
+
+    onUpdateSubtitle(wordDialog.segmentId, {
+      words: updatedWords,
+      text: newText,
+    });
+
+    setWordDialog({ open: false, segmentId: '', wordIndex: -1, word: null });
+  };
+
+  const updateWordInDialog = (updates: Partial<Word>) => {
+    if (!wordDialog.word) return;
+    setWordDialog(prev => ({
+      ...prev,
+      word: { ...prev.word!, ...updates }
+    }));
+  };
+
+  // 🚀 Handler pour émojis FONCTIONNEL
+  const handleEmojiSelect = (segmentId: string, emoji: string) => {
+    const segment = segments.find(s => s.id === segmentId);
+    if (!segment) return;
+
+    // Ajouter l'emoji à la fin du texte avec un espace
+    const newText = segment.text + (segment.text.endsWith(' ') ? '' : ' ') + emoji;
+    
+    // Mettre à jour le segment
+    onUpdateSubtitle(segmentId, { text: newText });
+    
+    console.log(`🎉 Emoji ${emoji} ajouté au segment ${segmentId}`);
+  };
+
+  const isSegmentActive = (segment: SubtitleSegment) => {
+    return currentTime >= segment.startTime && currentTime <= segment.endTime;
+  };
+
+  const getWordStyle = (word: Word, isActive: boolean) => {
+    const baseStyle = {
+      cursor: 'pointer',
+      padding: '2px 4px',
+      borderRadius: '3px',
+      margin: '0 1px',
+      transition: 'all 0.15s ease', // Plus fluide
+      fontSize: '14px',
+      display: 'inline-block',
+    };
+
+    if (isActive) {
+      return {
+        ...baseStyle,
+        backgroundColor: 'rgba(59, 130, 246, 0.25)',
+        color: '#1e40af',
+        transform: 'scale(1.03)', // Légèrement plus prononcé
+        fontWeight: '600',
+        boxShadow: '0 1px 3px rgba(59, 130, 246, 0.3)',
+      };
     }
-  }, [currentTime, segments]);
 
-  const formatTime = (seconds: number): string => {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+    if (word.color) {
+      const colorMap = {
+        yellow: '#fef3c7',
+        green: '#d1fae5',  
+        red: '#fee2e2',
+      };
+      return {
+        ...baseStyle,
+        backgroundColor: colorMap[word.color] || '#f3f4f6',
+        color: '#374151',
+      };
+    }
+
+    return {
+      ...baseStyle,
+      backgroundColor: 'transparent',
+      color: '#6b7280',
+    };
   };
 
-  const updateWord = (segmentId: string, wordIndex: number, updates: Partial<Word>) => {
-    const seg = segments.find((s) => s.id === segmentId);
-    if (!seg?.words) return;
-    const newWords = [...seg.words];
-    newWords[wordIndex] = { ...newWords[wordIndex], ...updates };
-    const newText = newWords.map((w) => w.text).join(' ');
-    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
-  };
-
-  const deleteWord = (segmentId: string, wordIndex: number) => {
-    const seg = segments.find((s) => s.id === segmentId);
-    if (!seg?.words) return;
-    const newWords = seg.words.filter((_, i) => i !== wordIndex);
-    const newText = newWords.map((w) => w.text).join(' ');
-    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
-  };
-
-  const addWord = (segmentId: string, afterIndex: number) => {
-    const seg = segments.find((s) => s.id === segmentId);
-    if (!seg?.words) return;
-    const w = prompt('Nouveau mot :')?.trim();
-    if (!w) return;
-    const newWords = [...seg.words];
-    const prev = newWords[afterIndex];
-    const next = newWords[afterIndex + 1];
-    const start = prev?.end ?? seg.startTime;
-    const end = next?.start ?? start + 0.3;
-    newWords.splice(afterIndex + 1, 0, { text: w, start, end, confidence: 1 });
-    const newText = newWords.map((x) => x.text).join(' ');
-    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
-  };
-
-  const splitIntoNewLine = (segmentId: string, idx: number) => {
-    alert('Split à gérer dans le parent');
-  };
-
-  const addLineBreak = (segmentId: string, idx: number) => {
-    const seg = segments.find((s) => s.id === segmentId);
-    if (!seg?.words) return;
-    const newWords = [...seg.words];
-    newWords[idx] = { ...newWords[idx], lineBreak: true };
-    const newText = newWords
-      .map((w, i) =>
-        w.text + (w.lineBreak ? '\n' : i < newWords.length - 1 ? ' ' : '')
-      )
-      .join('');
-    onUpdateSubtitle(segmentId, { words: newWords, text: newText });
-  };
-
-  const setWordColor = (segmentId: string, idx: number, color: Word['color'] | null) => {
-    updateWord(segmentId, idx, { color: color ?? undefined });
-  };
-
-  const updateTiming = (segmentId: string, field: 'startTime' | 'endTime', val: number) => {
-    onUpdateSubtitle(segmentId, { [field]: val });
+  // 🎯 Fonction pour obtenir la couleur de confiance
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.9) return 'text-green-600 bg-green-50';
+    if (confidence >= 0.8) return 'text-yellow-600 bg-yellow-50';
+    return 'text-red-600 bg-red-50';
   };
 
   return (
-    <Card className="h-full flex flex-col">
-      <div className="p-4 border-b">
-        <h3 className="font-semibold">Éditer les sous-titres</h3>
+    <>
+      {/* 🎯 Header uniforme avec précision */}
+      <div className="border-b bg-gradient-to-r from-blue-50 to-purple-50 px-3 py-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">✏️ Edit Captions</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-bold">
+              60fps
+            </span>
+          </div>
+          
+          {/* 🚀 Affichage de la précision */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">Précision:</span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getConfidenceColor(averageConfidence / 100)}`}>
+              {averageConfidence.toFixed(1)}%
+            </span>
+          </div>
+        </div>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-auto p-4 space-y-2">
-        {segments.map((seg, ix) => {
-          const active = currentTime >= seg.startTime && currentTime <= seg.endTime;
-          const editing = editingId === seg.id;
+
+      <div className="h-full overflow-y-auto p-4 space-y-3">
+        {segments.map((segment) => {
+          const isActive = isSegmentActive(segment);
+          const isEditing = editingId === segment.id;
+          
+          // Calcul de la confiance du segment
+          const segmentConfidence = segment.words?.length 
+            ? calculateAverageConfidence(segment.words)
+            : 0;
+
           return (
             <div
-              key={seg.id}
-              data-segment-index={ix}
-              className={cn(
-                'p-3 rounded-lg border',
-                active ? 'bg-primary/10 border-primary/50' : 'bg-muted/50'
-              )}
+              key={segment.id}
+              className={`p-3 rounded-lg border transition-all duration-200 ${
+                isActive 
+                  ? 'border-blue-500 bg-blue-50 shadow-md transform scale-[1.02]' 
+                  : 'border-gray-200 bg-white hover:bg-gray-50 hover:shadow-sm'
+              }`}
             >
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-muted-foreground">
-                  {formatTime(seg.startTime)} – {formatTime(seg.endTime)}
-                </span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-mono">
+                    {formatTime(segment.startTime)} → {formatTime(segment.endTime)}
+                  </span>
+                  {/* Confiance du segment */}
+                  {segment.words?.length && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getConfidenceColor(segmentConfidence / 100)}`}>
+                      {segmentConfidence.toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+                
                 <div className="flex gap-1">
+                  {/* 🎉 Bouton emoji FONCTIONNEL */}
+                  <EmojiPicker
+                    onEmojiSelect={(emoji) => handleEmojiSelect(segment.id, emoji)}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-gray-500 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
+                      title="Ajouter un emoji"
+                    >
+                      <Smile className="h-3 w-3" />
+                    </Button>
+                  </EmojiPicker>
+                  
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setEditingId(editing ? null : seg.id)}
+                    onClick={() => handleEditStart(segment)}
+                    className="h-6 w-6 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    title="Éditer le texte"
                   >
-                    <Edit2 className="h-4 w-4" />
+                    <Edit3 className="h-3 w-3" />
                   </Button>
+                  
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onDeleteSubtitle(seg.id)}
+                    onClick={() => onDeleteSubtitle(segment.id)}
+                    className="h-6 w-6 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Supprimer"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
-              {editing ? (
-                <>
-                  <textarea
-                    className="w-full p-2 border rounded min-h-[60px]"
-                    value={seg.text}
-                    onChange={(e) =>
-                      onUpdateSubtitle(seg.id, { text: e.target.value })
-                    }
+
+              {isEditing ? (
+                <div className="space-y-2">
+                  <Input
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="text-sm"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleEditSave(segment.id);
+                      } else if (e.key === 'Escape') {
+                        handleEditCancel();
+                      }
+                    }}
                   />
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      type="number"
-                      value={seg.startTime}
-                      onChange={(e) =>
-                        updateTiming(seg.id, 'startTime', parseFloat(e.target.value))
-                      }
-                      step={0.1}
-                      className="w-24"
-                    />
-                    <Input
-                      type="number"
-                      value={seg.endTime}
-                      onChange={(e) =>
-                        updateTiming(seg.id, 'endTime', parseFloat(e.target.value))
-                      }
-                      step={0.1}
-                      className="w-24"
-                    />
-                    <Button onClick={() => setEditingId(null)}>OK</Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleEditSave(segment.id)}
+                      className="h-7 px-3 text-xs bg-blue-600 hover:bg-blue-700"
+                    >
+                      Sauvegarder
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleEditCancel}
+                      className="h-7 px-3 text-xs"
+                    >
+                      Annuler
+                    </Button>
                   </div>
-                </>
+                </div>
               ) : (
-                <div className="flex flex-wrap gap-1">
-                  {seg.words && seg.words.length > 0 ? (
-                    seg.words.map((w, wi) => (
-                      <div key={wi} className="inline-flex items-center">
+                <div className="text-sm leading-relaxed">
+                  {segment.words && segment.words.length > 0 ? (
+                    segment.words.map((word, index) => {
+                      const wordActive = isActive && 
+                        currentTime >= word.start && 
+                        currentTime <= word.end;
+                      
+                      return (
                         <span
-                          className={cn(
-                            'px-1 py-0.5 rounded cursor-pointer',
-                            hoveredWord?.segmentId === seg.id &&
-                              hoveredWord.wordIndex === wi
-                              ? 'bg-primary/20'
-                              : 'hover:bg-primary/10',
-                            w.color && `text-${w.color}-600 bg-${w.color}-100`,
-                            selectedWord?.segmentId === seg.id &&
-                              selectedWord.wordIndex === wi
-                              ? 'ring-2 ring-primary'
-                              : ''
-                          )}
-                          onMouseEnter={() =>
-                            setHoveredWord({ segmentId: seg.id, wordIndex: wi })
-                          }
-                          onMouseLeave={() => setHoveredWord(null)}
-                          onClick={() =>
-                            setSelectedWord({ segmentId: seg.id, wordIndex: wi })
-                          }
+                          key={`${segment.id}-word-${index}`}
+                          style={getWordStyle(word, wordActive)}
+                          onClick={() => handleWordClick(segment.id, index, word)}
+                          className="hover:bg-gray-100 hover:shadow-sm transition-all duration-150"
+                          title={`Confiance: ${Math.round(word.confidence * 100)}%`}
+                          onMouseEnter={(e) => {
+                            if (!wordActive) {
+                              e.currentTarget.style.backgroundColor = '#f3f4f6';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!wordActive) {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }
+                          }}
                         >
-                          {w.text}
+                          {word.text}
                         </span>
-
-                        {selectedWord?.segmentId === seg.id &&
-                          selectedWord.wordIndex === wi && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="ml-1 p-0 h-6 w-6"
-                                >
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, null)}>
-                                  Aucune couleur
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, 'green')}>
-                                  Vert
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, 'yellow')}>
-                                  Jaune
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setWordColor(seg.id, wi, 'red')}>
-                                  Rouge
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => addLineBreak(seg.id, wi)}>
-                                  Saut de ligne
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => splitIntoNewLine(seg.id, wi)}>
-                                  Split ligne
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => addWord(seg.id, wi)}>
-                                  <Plus className="h-3 w-3 mr-1" /> Ajouter mot
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => deleteWord(seg.id, wi)}>
-                                  <Trash2 className="h-3 w-3 mr-1" /> Supprimer
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-
-                        {w.lineBreak && <br />}
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
-                    <span className="text-muted-foreground">{seg.text}</span>
+                    <span className="text-gray-700">{segment.text}</span>
                   )}
                 </div>
               )}
@@ -261,6 +332,97 @@ export function EditCaptions({
           );
         })}
       </div>
-    </Card>
+
+      {/* Dialog d'édition de mot */}
+      <Dialog open={wordDialog.open} onOpenChange={(open) => 
+        setWordDialog(prev => ({ ...prev, open }))
+      }>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Éditer le mot</DialogTitle>
+          </DialogHeader>
+          
+          {wordDialog.word && (
+            <div className="space-y-4">
+              <div>
+                <Label>Texte</Label>
+                <Input
+                  value={wordDialog.word.text}
+                  onChange={(e) => updateWordInDialog({ text: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Début (s)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={wordDialog.word.start}
+                    onChange={(e) => updateWordInDialog({ start: parseFloat(e.target.value) })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Fin (s)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={wordDialog.word.end}
+                    onChange={(e) => updateWordInDialog({ end: parseFloat(e.target.value) })}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Couleur de surlignage</Label>
+                <Select
+                  value={wordDialog.word.color || 'none'}
+                  onValueChange={(value) => 
+                    updateWordInDialog({ 
+                      color: value === 'none' ? undefined : value as any 
+                    })
+                  }
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucune</SelectItem>
+                    <SelectItem value="yellow">🟡 Jaune</SelectItem>
+                    <SelectItem value="green">🟢 Vert</SelectItem>
+                    <SelectItem value="red">🔴 Rouge</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Confiance: {Math.round((wordDialog.word.confidence || 0) * 100)}%</Label>
+                <div className="mt-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all duration-300"
+                    style={{ width: `${(wordDialog.word.confidence || 0) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button onClick={handleWordUpdate} className="flex-1">
+                  Mettre à jour
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setWordDialog({ open: false, segmentId: '', wordIndex: -1, word: null })}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

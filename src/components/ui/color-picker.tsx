@@ -1,80 +1,88 @@
+// src/components/ui/color-picker.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 
 interface ColorPickerProps {
   value: string;
   onChange: (color: string) => void;
-  className?: string;
+  disabled?: boolean;
 }
 
-export function ColorPicker({ value, onChange, className }: ColorPickerProps) {
-  const [color, setColor] = useState(value);
-  
-  useEffect(() => {
-    setColor(value);
-  }, [value]);
+const PRESET_COLORS = [
+  '#FFFFFF', '#000000', '#FF6B35', '#F7931E', '#FFD23F',
+  '#06FFA5', '#00BFFF', '#3B82F6', '#8B5CF6', '#EC4899',
+  '#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4',
+  '#6366F1', '#A855F7', '#E11D48', '#DC2626', '#EA580C'
+];
 
-  const presetColors = [
-    '#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF',
-    '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080',
-    '#FFC0CB', '#A52A2A', '#808080', '#FFD700', '#4B0082',
-  ];
+export function ColorPicker({ value, onChange, disabled = false }: ColorPickerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
 
-  const handleColorChange = (newColor: string) => {
-    setColor(newColor);
-    onChange(newColor);
+  const handleColorChange = (color: string) => {
+    setInputValue(color);
+    onChange(color);
+    setIsOpen(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+    if (newValue.match(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)) {
+      onChange(newValue);
+    }
   };
 
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className={cn("w-full justify-start text-left font-normal", className)}
+          disabled={disabled}
+          className="w-full justify-start text-left font-normal"
         >
           <div className="flex items-center gap-2">
             <div
-              className="w-6 h-6 rounded border border-gray-300"
-              style={{ backgroundColor: color }}
+              className="w-4 h-4 rounded border border-gray-300 dark:border-gray-600"
+              style={{ backgroundColor: value }}
             />
-            <span>{color}</span>
+            <span className="text-sm">{value}</span>
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64">
+      <PopoverContent className="w-64 p-3">
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-1">
-            {presetColors.map((presetColor) => (
+          <div>
+            <Input
+              value={inputValue}
+              onChange={handleInputChange}
+              placeholder="#000000"
+              className="text-sm"
+            />
+          </div>
+          
+          <div className="grid grid-cols-5 gap-2">
+            {PRESET_COLORS.map((color) => (
               <button
-                key={presetColor}
-                className={cn(
-                  "w-8 h-8 rounded border-2 transition-all",
-                  color === presetColor ? "border-primary" : "border-gray-200"
-                )}
-                style={{ backgroundColor: presetColor }}
-                onClick={() => handleColorChange(presetColor)}
+                key={color}
+                onClick={() => handleColorChange(color)}
+                className="w-8 h-8 rounded border-2 border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
+                style={{ backgroundColor: color }}
+                title={color}
               />
             ))}
           </div>
           
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              value={color}
-              onChange={(e) => handleColorChange(e.target.value)}
-              placeholder="#000000"
-              className="flex-1"
-            />
+          <div>
             <input
               type="color"
-              value={color}
+              value={value}
               onChange={(e) => handleColorChange(e.target.value)}
-              className="w-12 h-10 cursor-pointer rounded"
+              className="w-full h-8 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
             />
           </div>
         </div>

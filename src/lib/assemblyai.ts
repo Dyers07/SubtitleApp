@@ -15,6 +15,8 @@ interface AssemblyAIResponse {
   text?: string;
   words?: AssemblyAIWord[];
   error?: string;
+  language_code?: string; // Langue détectée
+  language_confidence?: number; // Confiance dans la détection
 }
 
 export class AssemblyAIService {
@@ -30,9 +32,6 @@ export class AssemblyAIService {
     console.log('File size:', file.size, 'bytes');
     console.log('File type:', file.type);
     
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
       const response = await fetch(`${this.baseUrl}/upload`, {
         method: 'POST',
@@ -68,15 +67,28 @@ export class AssemblyAIService {
       },
       body: JSON.stringify({
         audio_url: audioUrl,
-        language_code: 'fr', // Changez selon vos besoins
+        // CORRECTION: Utiliser la détection automatique de langue
+        language_detection: true, // Active la détection automatique
+        // Ne pas spécifier language_code pour laisser AssemblyAI détecter
+        
+        // Options utiles pour améliorer la transcription
+        punctuate: true,
+        format_text: true,
+        dual_channel: false,
+        
+        // Amélioration de la précision
+        word_boost: [], // Peut être utilisé pour booster des mots spécifiques
+        boost_param: 'default',
       }),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to create transcript');
+      const errorText = await response.text();
+      throw new Error(`Failed to create transcript: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('Transcript created with ID:', data.id);
     return data.id;
   }
 
@@ -100,19 +112,34 @@ export class AssemblyAIService {
     do {
       await new Promise(resolve => setTimeout(resolve, 3000)); // Attendre 3 secondes
       transcript = await this.getTranscript(transcriptId);
+      
+      if (transcript.status === 'processing' || transcript.status === 'queued') {
+        console.log(`Transcription status: ${transcript.status}...`);
+      }
     } while (transcript.status === 'queued' || transcript.status === 'processing');
 
     if (transcript.status === 'error') {
       throw new Error(transcript.error || 'Transcription failed');
     }
 
+    // Log de la langue détectée
+    if (transcript.language_code) {
+      console.log(`🌍 Detected language: ${transcript.language_code} (confidence: ${transcript.language_confidence || 'N/A'})`);
+    }
+
+    console.log('✅ Transcription completed successfully');
     return transcript;
   }
 
   // Convertir la réponse AssemblyAI en nos sous-titres
   static convertToSubtitles(transcript: AssemblyAIResponse): Subtitle[] {
-    if (!transcript.words) return [];
+    if (!transcript.words) {
+      console.warn('No words found in transcript');
+      return [];
+    }
 
+    console.log(`Converting ${transcript.words.length} words to subtitles...`);
+    
     const subtitles: Subtitle[] = [];
     let currentSubtitle: Subtitle | null = null;
     let wordCount = 0;
@@ -135,7 +162,7 @@ export class AssemblyAIService {
         }
 
         currentSubtitle = {
-          id: `subtitle-${index}`,
+          id: `subtitle-${subtitles.length}`,
           text: word.text,
           start: startTime,
           end: endTime,
@@ -166,6 +193,12 @@ export class AssemblyAIService {
       subtitles.push(currentSubtitle);
     }
 
+    console.log(`✅ Generated ${subtitles.length} subtitle segments`);
+    
+    // Log des statistiques
+    const avgConfidence = transcript.words.reduce((sum, word) => sum + word.confidence, 0) / transcript.words.length;
+    console.log(`📊 Average confidence: ${(avgConfidence * 100).toFixed(1)}%`);
+
     return subtitles;
   }
 }
@@ -179,7 +212,7 @@ export function getAssemblyAI(): AssemblyAIService {
       console.error('NEXT_PUBLIC_ASSEMBLY_AI_API_KEY is not set in environment variables');
       throw new Error('NEXT_PUBLIC_ASSEMBLY_AI_API_KEY is not set');
     }
-    console.log('AssemblyAI API key found, length:', ASSEMBLY_AI_API_KEY.length);
+    console.log('🔑 AssemblyAI API key found, initializing service...');
     assemblyAIInstance = new AssemblyAIService(ASSEMBLY_AI_API_KEY);
   }
   return assemblyAIInstance;

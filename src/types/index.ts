@@ -1,6 +1,6 @@
 // src/types/index.ts
 
-/* ────────── Mot – format “Remotion / Project” ────────── */
+/* ────────── Mot – format "Remotion / Project" ────────── */
 export interface Word {
   text: string;
   start: number;                  // début en secondes
@@ -10,7 +10,7 @@ export interface Word {
   lineBreak?: boolean;            // si on force un saut de ligne après
 }
 
-/* ────────── Sous-titre – format “Remotion / Project” ────────── */
+/* ────────── Sous-titre – format "Remotion / Project" ────────── */
 export interface Subtitle {
   id: string;
   text: string;
@@ -19,7 +19,7 @@ export interface Subtitle {
   words?: Word[];
 }
 
-/* ────────── Segment – format “UI / v2” ────────── */
+/* ────────── Segment – format "UI / v2" ────────── */
 export interface SubtitleSegment {
   id: string;
   startTime: number;
@@ -41,7 +41,7 @@ export interface SubtitleSegment {
   }>;
 }
 
-/* ────────── Style global d’un projet Remotion ────────── */
+/* ────────── Style global d'un projet Remotion ────────── */
 export interface SubtitleStyle {
   fontSize: number;
   fontFamily: string;
@@ -62,6 +62,22 @@ export interface SubtitleStyle {
   shadow: 'none' | 'small' | 'medium' | 'large';
   shadowColor: string;
   shadowBlur: number;
+
+  // 🚀 Stroke amélioré avec support pixels
+  strokeWeight: 'none' | 'small' | 'medium' | 'large';
+  strokePixels?: number; // Valeur en pixels pour le stroke
+  strokeColor: string;
+  punctuation: boolean;
+  emojiAnimation: boolean;
+
+  // Modes de highlight étendus pour 60 FPS
+  wordHighlight: 'zoom' | 'background' | 'glow' | 'opacity' | 'slide' | 'pulse' | 'rainbow' | 'bounce';
+  wordBackgroundColor: string;
+  wordBackgroundOpacity: number;
+  
+  // Espacement entre mots et mouvement
+  wordSpacing: number; // en em (1 = espacement normal)
+  textMovement: boolean; // Animation de mouvement du texte
 
   neonEnabled: boolean;
   neonColor: string;
@@ -87,7 +103,11 @@ export interface VideoProject {
   style: SubtitleStyle;
   width: number;
   height: number;
-  fps: number;
+  fps: number; // Sera 60 par défaut
+  // Effets visuels (optionnels)
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
 }
 
 /* ────────── Props ExportDialog ────────── */
@@ -118,17 +138,33 @@ export const defaultSubtitleStyle: SubtitleStyle = {
   textTransform: 'none',
   color: '#FFFFFF',
 
-  backgroundColor: '#000000',
-  backgroundOpacity: 0.7,
+  backgroundColor: 'transparent',
+  backgroundOpacity: 0,
   padding: 12,
   borderRadius: 8,
 
-  position: 'bottom',
-  offsetY: 50,
+  position: 'middle', // Centré par défaut
+  offsetY: 50, // Milieu de l'écran
 
   shadow: 'medium',
   shadowColor: '#000000',
   shadowBlur: 4,
+
+  // 🚀 Stroke optimisé avec pixels
+  strokeWeight: 'none',
+  strokePixels: 0, // Pas de stroke par défaut
+  strokeColor: '#000000',
+  punctuation: true, // Activé par défaut
+  emojiAnimation: true, // Activé par défaut
+
+  // Highlight par défaut optimisé 60 FPS
+  wordHighlight: 'zoom', // Mode zoom par défaut
+  wordBackgroundColor: '#FF6B35', // Orange vif
+  wordBackgroundOpacity: 1, // Opaque
+  
+  // Espacement entre mots réduit et mouvement optimisé 60 FPS
+  wordSpacing: 0.12, // Réduit pour fluidité 60fps
+  textMovement: false, // Mouvement désactivé par défaut
 
   neonEnabled: false,
   neonColor: '#00FF00',
@@ -136,10 +172,10 @@ export const defaultSubtitleStyle: SubtitleStyle = {
 
   animationIn: 'fade',
   animationOut: 'fade',
-  animationDuration: 0.3,
-  animation: true,
+  animationDuration: 0.12, // 🚀 Ultra-optimisé pour 60 FPS
+  animation: true, // Activé par défaut
 
-  autoEmojis: false,
+  autoEmojis: true, // Activé par défaut
   lineHeight: 1.4,
 
   highlightWords: false,
