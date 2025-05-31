@@ -213,6 +213,8 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({ onVideoProcessed }) =>
               <Video className="h-5 w-5" />
               Upload de vidéo 🎬
             </CardTitle>
+
+            
             <CardDescription>
               Sélectionnez une vidéo MP4 pour générer automatiquement les sous-titres
             </CardDescription>

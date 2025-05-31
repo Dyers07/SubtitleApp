@@ -7,7 +7,7 @@ const nextConfig = {
       bodySizeLimit: '100mb', // Augmenter la limite à 100 MB
     },
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     // Alias '@' vers 'src' pour typescript et le bundler
     if (!config.resolve) {
       config.resolve = {};
@@ -22,8 +22,25 @@ const nextConfig = {
       config.externals.push('@remotion/bundler', '@remotion/renderer');
     }
 
-    return config;
-  },
-};
-
-module.exports = nextConfig;
+    // ✅ CORRECTION: Éviter les conflits de chunks
+    if (!isServer && !dev) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          ...config.optimization.splitChunks,
+          cacheGroups: {
+            ...config.optimization.splitChunks.cacheGroups,
+            // Éviter les conflits en forçant des noms uniques
+                        default: {
+                          ...config.optimization.splitChunks.cacheGroups.default,
+                          name: false, // Désactive la réutilisation des noms
+                        },
+                      },
+                    },
+                  };
+                }
+                return config;
+              },
+            };
+            
+            module.exports = nextConfig;

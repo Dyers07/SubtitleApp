@@ -1,4 +1,4 @@
-// src/components/v2/video-player.tsx - OPTIMISÉ pour chargement rapide
+// src/components/v2/video-player.tsx - Version corrigée SANS TREMBLEMENT
 'use client';
 
 import React, {
@@ -19,7 +19,6 @@ import {
   VolumeX,
   Maximize2,
   RefreshCw,
-  Move,
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -72,9 +71,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
-  // 🚀 État de chargement pour améliorer l'UX
-  const [isLoading, setIsLoading] = useState(true);
+  // ✅ CORRECTION: Pas de loading par défaut
+  const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  
+  // ✨ Animation YouTube-like pour play/pause
+  const [showPlayPauseIcon, setShowPlayPauseIcon] = useState(false);
+  const [playPauseAnimating, setPlayPauseAnimating] = useState(false);
   
   // Effets visuels pour la vidéo
   const [brightness, setBrightness] = useState(project.brightness || 100);
@@ -82,20 +85,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [saturation, setSaturation] = useState(project.saturation || 100);
   const [audioVolume, setAudioVolume] = useState(50);
   
-  // États pour le drag professionnel des sous-titres
-  const [isDragging, setIsDragging] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
-  const [subtitlePosition, setSubtitlePosition] = useState({ 
-    x: 50,
-    y: project.style.offsetY || 50
-  });
-  
   const containerRef = useRef<HTMLDivElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
-  const subtitleBoxRef = useRef<HTMLDivElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const playPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 🚀 Données du projet mémorisées pour éviter les re-render
+  // 🚀 Données du projet mémorisées avec timing STABILISÉ
   const memoizedInputProps = useMemo(() => ({
     id: project.id,
     videoUrl: project.videoUrl,
@@ -103,8 +98,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     subtitles: isHidden ? [] : project.subtitles,
     style: {
       ...project.style,
-      offsetY: subtitlePosition.y,
-      animationDuration: project.style.animationDuration || 0.12,
+      // 🎯 CORRECTION: Animation plus lente pour stabilité
+      animationDuration: project.style.animationDuration || 0.15, // Retour à 0.15s
+      // 🚀 SUPPRESSION de la transition forcée qui peut causer le tremblement
     },
     width: project.width,
     height: project.height,
@@ -121,25 +117,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     project.width,
     project.height,
     isHidden,
-    subtitlePosition.y,
     brightness,
     contrast,
     saturation,
   ]);
 
-  // 🚀 Gestion du chargement avec timeout
+  // ✅ CORRECTION: Gestion du chargement sans timeout artificiel
   useEffect(() => {
-    setIsLoading(true);
     setLoadError(null);
-
-    // Timeout de 10 secondes pour le chargement
-    loadTimeoutRef.current = setTimeout(() => {
-      if (isLoading) {
-        setLoadError('Timeout de chargement - Vérifiez votre connexion');
-        setIsLoading(false);
-      }
-    }, 10000);
-
+    
     return () => {
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current);
@@ -147,7 +133,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [project.videoUrl]);
 
-  // 🚀 Callback quand le player est prêt
+  // ✅ CORRECTION: Callback simple sans délai
   const handlePlayerReady = useCallback(() => {
     console.log('✅ Player Remotion prêt');
     setIsLoading(false);
@@ -158,9 +144,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
-  // 🚀 Polling optimisé - seulement quand nécessaire
+  // 🚀 Polling optimisé à 30 FPS pour stabilité (CORRECTION MAJEURE)
   useEffect(() => {
-    if (!playerRef || isLoading) return;
+    if (!playerRef) return;
     
     const id = setInterval(() => {
       try {
@@ -174,10 +160,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       } catch (error) {
         console.warn('Erreur polling frame:', error);
       }
-    }, 33); // 30 FPS pour le polling (économie ressources)
+    }, 33); // 🎯 CORRECTION: Retour à 30 FPS (33ms) pour la stabilité
     
     return () => clearInterval(id);
-  }, [playerRef, project.fps, onTimeUpdate, isLoading]);
+  }, [playerRef, project.fps, onTimeUpdate]);
 
   // Gestion plein écran
   useEffect(() => {
@@ -191,32 +177,51 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Appliquer volume / mute
   useEffect(() => {
-    if (!playerRef || isLoading) return;
+    if (!playerRef) return;
     try {
       (playerRef as any).setVolume?.(muted ? 0 : volume);
     } catch (error) {
       console.warn('Erreur volume:', error);
     }
-  }, [playerRef, volume, muted, isLoading]);
+  }, [playerRef, volume, muted]);
 
-  // Play / pause
+  // ✨ Animation Play/Pause style YouTube
+  const showPlayPauseAnimation = useCallback((isPlaying: boolean) => {
+    setShowPlayPauseIcon(true);
+    setPlayPauseAnimating(true);
+    
+    // Nettoyer le timeout précédent
+    if (playPauseTimeoutRef.current) {
+      clearTimeout(playPauseTimeoutRef.current);
+    }
+    
+    // Masquer l'icône après 500ms
+    playPauseTimeoutRef.current = setTimeout(() => {
+      setPlayPauseAnimating(false);
+      setTimeout(() => setShowPlayPauseIcon(false), 150);
+    }, 500);
+  }, []);
+
+  // Play / pause avec animation
   const togglePlay = useCallback(() => {
-    if (!playerRef || isLoading) return;
+    if (!playerRef) return;
     try {
-      if (playing) {
-        playerRef.pause?.();
-      } else {
+      const newPlayingState = !playing;
+      if (newPlayingState) {
         playerRef.play?.();
+      } else {
+        playerRef.pause?.();
       }
-      setPlaying((p) => !p);
+      setPlaying(newPlayingState);
+      showPlayPauseAnimation(newPlayingState);
     } catch (error) {
       console.warn('Erreur play/pause:', error);
     }
-  }, [playerRef, playing, isLoading]);
+  }, [playerRef, playing, showPlayPauseAnimation]);
 
   // Seek précis
   const seek = useCallback((seconds: number) => {
-    if (!playerRef || isLoading) return;
+    if (!playerRef) return;
     try {
       const clamped = Math.max(0, Math.min(seconds, project.videoDuration));
       playerRef.seekTo?.(Math.floor(clamped * (project.fps || 60)));
@@ -225,48 +230,58 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     } catch (error) {
       console.warn('Erreur seek:', error);
     }
-  }, [playerRef, project.videoDuration, project.fps, onTimeUpdate, isLoading]);
+  }, [playerRef, project.videoDuration, project.fps, onTimeUpdate]);
 
   // Avancer / reculer
   const skip = useCallback((delta: number) => seek(time + delta), [seek, time]);
 
-  // Raccourcis clavier améliorés
-  const handleKey = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
-    if (isLoading) return;
+  // 🚀 Raccourcis clavier globaux améliorés
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Ignorer si on tape dans un input
+      if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
+      if (e.target && (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          skip(e.shiftKey ? 10 : 5);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          skip(e.shiftKey ? -10 : -5);
+          break;
+        case 'KeyF':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'KeyH':
+          e.preventDefault();
+          setIsHidden(!isHidden);
+          break;
+        case 'KeyM':
+          e.preventDefault();
+          setMuted(!muted);
+          break;
+        case 'Escape':
+          if (isFullscreen) {
+            document.exitFullscreen();
+          }
+          break;
+      }
+    };
+
+    // Attacher l'écouteur au document pour une portée globale
+    document.addEventListener('keydown', handleGlobalKeyDown);
     
-    switch (e.code) {
-      case 'Space':
-        e.preventDefault();
-        togglePlay();
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        skip(e.shiftKey ? 10 : 5);
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        skip(e.shiftKey ? -10 : -5);
-        break;
-      case 'KeyF':
-        e.preventDefault();
-        toggleFullscreen();
-        break;
-      case 'KeyH':
-        e.preventDefault();
-        setIsHidden(!isHidden);
-        break;
-      case 'KeyM':
-        e.preventDefault();
-        setMuted(!muted);
-        break;
-      case 'Escape':
-        if (isFullscreen) {
-          document.exitFullscreen();
-        }
-        break;
-    }
-  }, [togglePlay, skip, isHidden, muted, isFullscreen, isLoading]);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [togglePlay, skip, isHidden, muted, isFullscreen]);
 
   const focusOnHover = useCallback(() => containerRef.current?.focus(), []);
 
@@ -282,125 +297,68 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
-  // DRAG PROFESSIONNEL - Calcul précis de la position
-  const getSubtitleBounds = useCallback(() => {
-    if (!playerContainerRef.current) return { width: 30, height: 16 };
-    
-    const currentSub = project.subtitles.find(
-      (sub) => time >= sub.start && time <= sub.end
-    );
-    
-    if (!currentSub) return { width: 30, height: 16 };
-    
-    const textLength = currentSub.text.length;
-    const fontSize = project.style.fontSize || 36;
-    const containerRect = playerContainerRef.current.getBoundingClientRect();
-    
-    const estimatedWidth = Math.min(85, Math.max(25, (textLength * fontSize * 0.6) / containerRect.width * 100));
-    const estimatedHeight = Math.max(12, fontSize / containerRect.height * 100 * 1.5);
-    
-    return {
-      width: estimatedWidth,
-      height: estimatedHeight
-    };
-  }, [project.subtitles, time, project.style.fontSize]);
-
-  const handleSubtitleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!playerContainerRef.current) return;
-    
-    setIsDragging(true);
-    document.body.style.cursor = 'grabbing';
-    document.body.style.userSelect = 'none';
-  }, []);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !playerContainerRef.current) return;
-    
-    const rect = playerContainerRef.current.getBoundingClientRect();
-    const currentX = ((e.clientX - rect.left) / rect.width) * 100;
-    const currentY = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    const bounds = getSubtitleBounds();
-    const newX = Math.max(bounds.width / 2, Math.min(100 - bounds.width / 2, currentX));
-    const newY = Math.max(bounds.height / 2, Math.min(100 - bounds.height / 2, currentY));
-    
-    setSubtitlePosition({ x: newX, y: newY });
-    onSubtitlePositionChange?.(newY);
-  }, [isDragging, getSubtitleBounds, onSubtitlePositionChange]);
-
-  const handleMouseUp = useCallback(() => {
-    if (isDragging) {
-      setIsDragging(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-  }, [isDragging]);
-
-  // Event listeners pour le drag
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
   const handleAudioFileSelect = useCallback((file: File) => {
     console.log('Audio file selected:', file.name);
   }, []);
 
-  const currentSubtitle = useMemo(() => 
-    project.subtitles.find((sub) => time >= sub.start && time <= sub.end),
-    [project.subtitles, time]
-  );
+  // 🎯 Clic sur le player pour play/pause avec animation
+  const handlePlayerClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    togglePlay();
+  }, [togglePlay]);
+
+  // Nettoyage des timeouts
+  useEffect(() => {
+    return () => {
+      if (playPauseTimeoutRef.current) {
+        clearTimeout(playPauseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <TooltipProvider>
       <div className="flex flex-col h-full bg-white dark:bg-gray-800 theme-transition">
-        {/* Header uniforme */}
-        <div className="border-b bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-600 px-3 py-2.5 theme-transition">
-          <div className="flex items-center justify-between">
+        {/* ✅ HEADER UNIFORME avec les contrôles intégrés */}
+        <div className="h-14 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-600 flex items-center justify-between px-4 flex-shrink-0 theme-transition">
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">🎥 Video Player</span>
-              <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-2 py-0.5 rounded-full text-xs font-bold">
-                60fps
-              </span>
-              {isLoading && (
-                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
-                  <Loader2 size={10} className="animate-spin" />
-                  Chargement...
-                </span>
-              )}
+              <div className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse shadow-[0_0_5px_rgba(248,113,113,0.8)]"></div>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Video Player</span>
             </div>
-            
-            <VideoControls
-              onBrightnessChange={(brightness) => {
-                setBrightness(brightness);
-                onEffectsChange?.setBrightness(brightness);
-              }}
-              onContrastChange={(contrast) => {
-                setContrast(contrast);
-                onEffectsChange?.setContrast(contrast);
-              }}
-              onSaturationChange={(saturation) => {
-                setSaturation(saturation);
-                onEffectsChange?.setSaturation(saturation);
-              }}
-              onAudioFileSelect={handleAudioFileSelect}
-              onAudioVolumeChange={setAudioVolume}
-              brightness={brightness}
-              contrast={contrast}
-              saturation={saturation}
-              audioVolume={audioVolume}
-            />
+            <div className="text-xs text-gray-500 dark:text-gray-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full font-bold">
+              30fps UI
+            </div>
+            {/* ✅ CORRECTION: Indicateur de loading seulement si vraiment en loading */}
+            {isLoading && (
+              <div className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                <Loader2 size={10} className="animate-spin" />
+                Chargement...
+              </div>
+            )}
           </div>
+          
+          {/* 🎨 Contrôles Colors et Audio dans le header */}
+          <VideoControls
+            onBrightnessChange={(brightness: number) => {
+              setBrightness(brightness);
+              onEffectsChange?.setBrightness(brightness);
+            }}
+            onContrastChange={(contrast: number) => {
+              setContrast(contrast);
+              onEffectsChange?.setContrast(contrast);
+            }}
+            onSaturationChange={(saturation: number) => {
+              setSaturation(saturation);
+              onEffectsChange?.setSaturation(saturation);
+            }}
+            onAudioFileSelect={handleAudioFileSelect}
+            onAudioVolumeChange={setAudioVolume}
+            brightness={brightness}
+            contrast={contrast}
+            saturation={saturation}
+            audioVolume={audioVolume}
+          />
         </div>
 
         {/* Conteneur principal */}
@@ -410,19 +368,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }`}
           ref={containerRef}
           tabIndex={0}
-          onKeyDown={handleKey}
           onMouseEnter={focusOnHover}
         >
-          {/* Indicateur de drag */}
-          {isDragging && (
-            <div className="absolute top-4 left-4 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg">
-              <Move size={16} />
-              Position: {subtitlePosition.x.toFixed(0)}%, {subtitlePosition.y.toFixed(0)}%
-            </div>
-          )}
-          
           <div
-            className={`relative bg-black rounded-xl overflow-hidden shadow-lg transition-all duration-300 ${
+            className={`relative bg-black rounded-xl overflow-hidden shadow-lg transition-all duration-300 cursor-pointer ${
               isFullscreen 
                 ? 'w-full h-full max-w-none max-h-none' 
                 : 'w-full max-w-[280px] mx-auto hover:shadow-xl'
@@ -432,10 +381,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               height: isFullscreen ? '100%' : 'auto' 
             }}
             ref={playerContainerRef}
-            onMouseEnter={() => setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
+            onClick={handlePlayerClick}
           >
-            {/* État de chargement */}
+            {/* ✅ CORRECTION: État de chargement seulement si isLoading est vraiment true */}
             {isLoading && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-20">
                 <div className="text-center text-white">
@@ -454,7 +402,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     size="sm"
                     onClick={() => {
                       setLoadError(null);
-                      setIsLoading(true);
+                      setIsLoading(false);
                       window.location.reload();
                     }}
                     className="bg-blue-600 hover:bg-blue-700"
@@ -465,15 +413,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
 
-            {/* Player Remotion */}
+            {/* ✅ CORRECTION: Player Remotion sans délai artificiel */}
             <Player
               ref={(ref) => {
                 setPlayerRef(ref);
-                if (ref && isLoading) {
-                  // Délai pour laisser le temps au player de se charger
-                  setTimeout(() => {
-                    handlePlayerReady();
-                  }, 2000);
+                // ✅ CORRECTION: Pas de délai, player ready immédiatement
+                if (ref) {
+                  console.log('🚀 Player ref obtenu, prêt instantanément');
+                  setIsLoading(false);
                 }
               }}
               component={CaptionedVideo}
@@ -490,72 +437,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               controls={false}
             />
             
-            {/* Rectangle de sélection professionnel */}
-            {!isLoading && (isHovering || isDragging) && !isHidden && currentSubtitle && (
-              <div
-                className={`absolute border-2 bg-blue-400/10 rounded-lg backdrop-blur-sm transition-all duration-200 ${
-                  isDragging 
-                    ? 'border-blue-500 bg-blue-500/20 shadow-lg border-solid' 
-                    : 'border-blue-400 border-dashed'
-                }`}
-                style={{
-                  left: `${subtitlePosition.x}%`,
-                  top: `${subtitlePosition.y}%`,
-                  width: `${getSubtitleBounds().width}%`,
-                  height: `${getSubtitleBounds().height}%`,
-                  transform: 'translate(-50%, -50%)',
-                  cursor: isDragging ? 'grabbing' : 'grab',
-                  minWidth: '120px',
-                  minHeight: '40px',
-                  maxWidth: '90%',
-                  maxHeight: '30%',
-                }}
-                onMouseDown={handleSubtitleMouseDown}
-                ref={subtitleBoxRef}
-              >
-                {/* Poignées */}
-                <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
-                <div className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
-                <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
-                <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
-                
-                {/* Label */}
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs px-3 py-1 rounded-md font-medium whitespace-nowrap shadow-lg">
-                  <span className="flex items-center gap-1.5">
-                    <Move size={12} />
-                    Sous-titres
-                  </span>
+            {/* ✨ Animation Play/Pause style YouTube */}
+            {showPlayPauseIcon && (
+              <div className={`absolute inset-0 flex items-center justify-center pointer-events-none z-30 transition-all duration-150 ${
+                playPauseAnimating ? 'opacity-100 scale-100' : 'opacity-0 scale-125'
+              }`}>
+                <div className="bg-black/70 rounded-full p-6 backdrop-blur-sm">
+                  {playing ? (
+                    <Pause className="text-white" size={48} />
+                  ) : (
+                    <Play className="text-white ml-1" size={48} />
+                  )}
                 </div>
-                
-                {/* Lignes de guidage */}
-                {isDragging && (
-                  <>
-                    <div className="absolute top-1/2 left-0 w-full h-px bg-blue-400/60 -translate-y-1/2"></div>
-                    <div className="absolute left-1/2 top-0 h-full w-px bg-blue-400/60 -translate-x-1/2"></div>
-                  </>
-                )}
               </div>
             )}
             
-            {/* Bouton play/pause */}
-            {!isLoading && (
+            {/* Overlay hover pour bouton play/pause subtil */}
+            {!isLoading && !showPlayPauseIcon && (
               <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                <button 
-                  className="bg-black/50 rounded-full p-4 backdrop-blur-sm pointer-events-auto cursor-pointer hover:bg-black/70 transition-colors"
-                  onClick={togglePlay}
-                >
+                <div className="bg-black/30 rounded-full p-3 backdrop-blur-sm">
                   {playing ? (
-                    <Pause className="text-white" size={24} />
+                    <Pause className="text-white" size={20} />
                   ) : (
-                    <Play className="text-white ml-1" size={24} />
+                    <Play className="text-white ml-0.5" size={20} />
                   )}
-                </button>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Contrôles vidéo */}
+        {/* ✅ Contrôles vidéo simplifiés */}
         <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 theme-transition">
           <div className="h-1 bg-gray-200 dark:bg-gray-700 relative mx-2">
             <Slider
@@ -583,9 +495,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </Button>
               <div className="text-xs text-gray-700 dark:text-gray-300 ml-1">
                 {fmt(time)} / {fmt(project.videoDuration)}
-              </div>
-              <div className="text-xs text-green-600 dark:text-green-400 ml-2 font-mono bg-green-50 dark:bg-green-900/30 px-1 rounded">
-                60fps UI
               </div>
             </div>
 
@@ -662,18 +571,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   <Maximize2 size={12} />
                 </Button>
               </div>
-            </div>
-          </div>
-          
-          {/* Aide raccourcis clavier */}
-          <div className="px-2 pb-1">
-            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center gap-4">
-              <span>Espace: Play/Pause</span>
-              <span>←→: ±5s</span>
-              <span>Shift+←→: ±10s</span>
-              <span>F: Plein écran</span>
-              <span>H: Masquer</span>
-              <span>M: Muet</span>
             </div>
           </div>
         </div>

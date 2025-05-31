@@ -1,4 +1,4 @@
-// src/types/index.ts
+// src/types/index.ts - Version corrigée avec animation ultra-rapide
 
 /* ────────── Mot – format "Remotion / Project" ────────── */
 export interface Word {
@@ -128,10 +128,10 @@ export interface SubtitleCustomizerProps {
   onExportProgress: (progress: number) => void;
 }
 
-/* ────────── Valeurs par défaut ────────── */
+/* ────────── Valeurs par défaut ULTRA-OPTIMISÉES ────────── */
 export const defaultSubtitleStyle: SubtitleStyle = {
-  fontSize: 36,
-  fontFamily: 'Arial',
+  fontSize: 48,
+  fontFamily: 'Montserrat',
   fontWeight: 'bold',
   fontStyle: 'normal',
   textDecoration: 'none',
@@ -146,7 +146,7 @@ export const defaultSubtitleStyle: SubtitleStyle = {
   position: 'middle', // Centré par défaut
   offsetY: 50, // Milieu de l'écran
 
-  shadow: 'medium',
+  shadow: 'large',
   shadowColor: '#000000',
   shadowBlur: 4,
 
@@ -172,7 +172,7 @@ export const defaultSubtitleStyle: SubtitleStyle = {
 
   animationIn: 'fade',
   animationOut: 'fade',
-  animationDuration: 0.12, // 🚀 Ultra-optimisé pour 60 FPS
+  animationDuration: 0.04, // 🚀 CORRECTION: Ultra-optimisé pour synchronisation parfaite (au lieu de 0.12)
   animation: true, // Activé par défaut
 
   autoEmojis: true, // Activé par défaut

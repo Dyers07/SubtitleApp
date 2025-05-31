@@ -1,162 +1,196 @@
-// src/components/auth/UserMenu.tsx - AMÉLIORÉ avec ThemeToggle
+// src/components/auth/UserMenu.tsx - Menu utilisateur CORRIGÉ
 'use client';
 
-import React from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, LogOut, Settings, CreditCard, Palette, BarChart3, Crown } from 'lucide-react';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { 
+  User, 
+  Settings, 
+  Moon, 
+  Sun, 
+  LogOut, 
+  Crown, 
+  BarChart3,
+  ChevronDown,
+  HelpCircle,
+  CreditCard
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 export function UserMenu() {
   const { user, profile, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const [isOpen, setIsOpen] = useState(false);
 
-  if (!user) {
-    return (
-      <div className="flex items-center gap-2">
-        <ThemeToggle />
-      </div>
-    );
-  }
+  if (!user) return null;
 
   const displayName = profile?.name || user.email?.split('@')[0] || 'Utilisateur';
-  const initials = displayName
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   const handleSignOut = async () => {
     try {
-      const { error } = await signOut();
-      if (error) throw error;
-      
-      toast.success('✅ Déconnecté avec succès');
-    } catch (error: any) {
+      await signOut();
+      toast.success('Déconnexion réussie');
+      setIsOpen(false);
+      // Redirection sera gérée par le contexte auth
+    } catch (error) {
       toast.error('Erreur lors de la déconnexion');
     }
   };
 
-  const getSubscriptionStyle = (subscriptionPlan: string) => {
-    const styles = {
-      free: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-      pro: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      premium: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-    };
-    return styles[subscriptionPlan as keyof typeof styles] || styles.free;
-  };
-
-  const getSubscriptionIcon = (subscriptionPlan: string) => {
-    if (subscriptionPlan === 'premium') return <Crown className="mr-2 h-4 w-4 text-purple-500" />;
-    if (subscriptionPlan === 'pro') return <BarChart3 className="mr-2 h-4 w-4 text-blue-500" />;
-    return <User className="mr-2 h-4 w-4" />;
-  };
-
-  const currentPlan = profile?.subscription_plan || 'free';
+  const menuItems = [
+    {
+      icon: User,
+      label: 'Profil',
+      onClick: () => {
+        console.log('Navigation vers /profile');
+        window.location.href = '/profile';
+        setIsOpen(false);
+      }
+    },
+    {
+      icon: BarChart3,
+      label: 'Statistiques',
+      onClick: () => {
+        console.log('Navigation vers /dashboard/stats');
+        window.location.href = '/dashboard/stats';
+        setIsOpen(false);
+      }
+    },
+    {
+      icon: CreditCard,
+      label: 'Abonnement',
+      onClick: () => {
+        console.log('Navigation vers /subscription');
+        window.location.href = '/subscription';
+        setIsOpen(false);
+      }
+    },
+    {
+      icon: Settings,
+      label: 'Paramètres',
+      onClick: () => {
+        console.log('Navigation vers /settings');
+        window.location.href = '/settings';
+        setIsOpen(false);
+      }
+    },
+    {
+      icon: HelpCircle,
+      label: 'Aide',
+      onClick: () => {
+        console.log('Navigation vers /help');
+        window.location.href = '/help';
+        setIsOpen(false);
+      }
+    }
+  ];
 
   return (
-    <div className="flex items-center gap-2">
-      <ThemeToggle />
-      
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={profile?.avatar_url || ''} alt={displayName} />
-              <AvatarFallback className="bg-blue-500 text-white text-sm dark:bg-blue-600">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 dropdown-content" align="end" forceMount>
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-2">
-              <div className="flex items-center space-x-3">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={profile?.avatar_url || ''} alt={displayName} />
-                  <AvatarFallback className="bg-blue-500 text-white dark:bg-blue-600">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none text-primary">{displayName}</p>
-                  <p className="text-xs leading-none text-secondary">
-                    {user.email}
-                  </p>
+    <div className="relative">
+      {/* Trigger Button */}
+      <Button
+        variant="ghost"
+        className="flex items-center space-x-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <Avatar className="h-8 w-8">
+          <AvatarFallback className="bg-blue-600 text-white text-sm font-medium">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+        <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </Button>
+
+      {/* Backdrop */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 overflow-hidden">
+          {/* User Info Header */}
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+            <div className="flex items-center space-x-3">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-blue-600 text-white font-medium">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {displayName}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {user.email}
+                </p>
+                <div className="flex items-center mt-1">
+                  <Crown className="h-3 w-3 text-orange-500 mr-1" />
+                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                    {(profile as any)?.subscription?.toUpperCase() || 'FREE'}
+                  </span>
                 </div>
               </div>
-              
-              {profile?.subscription_plan && (
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${getSubscriptionStyle(currentPlan)}`}>
-                    {currentPlan.toUpperCase()}
-                  </span>
-                  {currentPlan === 'free' && (
-                    <span className="text-xs text-secondary">3 crédits restants</span>
-                  )}
-                </div>
-              )}
             </div>
-          </DropdownMenuLabel>
-          
-          <DropdownMenuSeparator />
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 theme-transition">
-            {getSubscriptionIcon(currentPlan)}
-            <span>Profil</span>
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 theme-transition">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Paramètres</span>
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 theme-transition">
-            <Palette className="mr-2 h-4 w-4" />
-            <span>Mes presets</span>
-          </DropdownMenuItem>
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 theme-transition">
-            <BarChart3 className="mr-2 h-4 w-4" />
-            <span>Statistiques</span>
-          </DropdownMenuItem>
-          
-          <DropdownMenuSeparator />
-          
-          <DropdownMenuItem className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 theme-transition">
-            <CreditCard className="mr-2 h-4 w-4" />
-            <div className="flex items-center justify-between w-full">
-              <span>Abonnement</span>
-              {currentPlan === 'free' && (
-                <span className="text-xs bg-gradient-to-r from-blue-500 to-purple-500 text-white px-2 py-0.5 rounded-full">
-                  Upgrade
-                </span>
+          </div>
+
+          {/* Menu Items */}
+          <div className="py-2">
+            {menuItems.map((item, index) => (
+              <button
+                key={index}
+                onClick={item.onClick}
+                className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <item.icon className="h-4 w-4" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+            
+            {/* Theme Toggle */}
+            <button
+              onClick={() => {
+                toggleTheme();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="h-4 w-4" />
+                  <span>Mode clair</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="h-4 w-4" />
+                  <span>Mode sombre</span>
+                </>
               )}
-            </div>
-          </DropdownMenuItem>
-          
-          <DropdownMenuSeparator />
-          
-          <DropdownMenuItem 
-            className="cursor-pointer text-red-600 focus:text-red-600 dark:text-red-400 focus:dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 theme-transition"
-            onClick={handleSignOut}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Se déconnecter</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            </button>
+          </div>
+
+          {/* Separator */}
+          <div className="border-t border-gray-200 dark:border-gray-700"></div>
+
+          {/* Sign Out */}
+          <div className="py-2">
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Se déconnecter</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

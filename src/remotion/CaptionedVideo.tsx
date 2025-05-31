@@ -1,5 +1,5 @@
-// src/remotion/CaptionedVideo.tsx - CORRIGÉ pour éviter les erreurs de rendu
-import React from 'react';
+// src/remotion/CaptionedVideo.tsx - VERSION ULTIME OPTIMISÉE
+import React, { useMemo } from 'react';
 import {
   AbsoluteFill,
   Video,
@@ -25,6 +25,36 @@ export interface CaptionedVideoProps {
   saturation?: number;
 }
 
+// Dictionnaire d'émojis en constante pour éviter la recréation
+const EMOJI_MAP: Record<string, string> = {
+  // Émotions de base
+  'happy': '😊', 'heureux': '😀', 'content': '😊', 'joie': '😄',
+  'sad': '😢', 'triste': '😢', 'malheureux': '😔', 'pleure': '😭',
+  'love': '❤️', 'amour': '❤️', 'aimer': '💕', 'coeur': '💖',
+  'laugh': '😂', 'rire': '😂', 'drôle': '🤣', 'mdr': '😆',
+  'wow': '😮', 'incroyable': '😲', 'amazing': '🤩', 'surpris': '😯',
+  
+  // Actions et objets
+  'super': '🎉', 'génial': '🎉', 'fantastique': '✨', 'excellent': '👌',
+  'merci': '🙏', 'thanks': '🙏', 'thank': '🙏', 'gratitude': '🙏',  
+  'question': '❓', 'pourquoi': '🤔', 'comment': '🤔', 'quoi': '❓',
+  'idée': '💡', 'idea': '💡', 'penser': '💭', 'réflexion': '🧠',
+  'attention': '⚠️', 'warning': '⚠️', 'danger': '⚠️', 'alerte': '🚨',
+  'bravo': '👏', 'félicitations': '🎊', 'congrats': '🎉', 'applaudir': '👏',
+  
+  // Tendance
+  'fire': '🔥', 'feu': '🔥', 'hot': '🔥', 'chaud': '🔥',
+  'cool': '😎', 'classe': '😎', 'stylé': '😎', 'swag': '😎',
+  'money': '💰', 'argent': '💰', 'cash': '💵', 'riche': '💸',
+  'strong': '💪', 'fort': '💪', 'muscle': '💪', 'puissant': '💪',
+  'fast': '⚡', 'rapide': '⚡', 'speed': '💨', 'vite': '💨',
+  'boom': '💥', 'explosion': '💥', 'bang': '💥', 'impact': '💥',
+  
+  // Réseaux sociaux
+  'like': '👍', 'dislike': '👎', 'follow': '➕', 'share': '🔄',
+  'viral': '📈', 'trending': '🔥', 'views': '👀', 'subscribers': '📊',
+};
+
 export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
   videoUrl,
   subtitles,
@@ -35,21 +65,61 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
 }): React.ReactElement => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  
+  // Temps en millisecondes pour une précision maximale
+  const timeInMs = (frame / fps) * 1000;
   const currentTime = frame / fps;
 
-  const currentSub = subtitles.find(
-    (sub) => currentTime >= sub.start && currentTime <= sub.end
-  );
+  // Trouve le sous-titre actuel avec mémorisation
+  const currentSub = useMemo(() => {
+    return subtitles.find(
+      (sub) => timeInMs >= sub.start * 1000 && timeInMs <= sub.end * 1000
+    );
+  }, [subtitles, timeInMs]);
 
-  const getVideoStyle = (): React.CSSProperties => {
+  // Process words et extraction des émojis
+  const { processedWords, lineEmojis } = useMemo(() => {
+    if (!currentSub) return { processedWords: [], lineEmojis: [] };
+    
+    const emojis: string[] = [];
+    const fullText = currentSub.text.toLowerCase();
+    
+    if (style.autoEmojis) {
+      Object.entries(EMOJI_MAP).forEach(([key, emoji]) => {
+        if (fullText.includes(key) && !emojis.includes(emoji)) {
+          emojis.push(emoji);
+        }
+      });
+    }
+    
+    const words = currentSub.words?.map(word => {
+      let processedText = word.text;
+      
+      if (!style.punctuation) {
+        processedText = processedText.replace(/[.,!?;:]/g, '');
+      }
+      
+      return {
+        ...word,
+        processedText
+      };
+    }) || [];
+    
     return {
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover' as const,
-      filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`,
+      processedWords: words,
+      lineEmojis: emojis.slice(0, 3) // Max 3 émojis
     };
+  }, [currentSub, style.punctuation, style.autoEmojis]);
+
+  // Style de la vidéo
+  const videoStyle: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    filter: `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`,
   };
 
+  // Position des sous-titres
   const getPositionStyle = (): React.CSSProperties => {
     const base: React.CSSProperties = {
       position: 'absolute',
@@ -84,9 +154,9 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     }
   };
 
-  // 🚀 Animation ultra-fluide optimisée pour 60 FPS
-  const getWordAnimation = (wordStartFrame: number, wordEndFrame: number, animationType: SubtitleStyle['wordHighlight']) => {
-    const isActive = frame >= wordStartFrame && frame <= wordEndFrame;
+  // 🚀 Animation ultra-fluide optimisée avec précision milliseconde
+  const getWordAnimation = (wordStartMs: number, wordEndMs: number) => {
+    const isActive = timeInMs >= wordStartMs && timeInMs <= wordEndMs;
     
     if (!isActive || !style.animation) {
       return {
@@ -96,6 +166,12 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
       };
     }
 
+    // Calcul précis des frames pour une synchronisation parfaite
+    const wordStartFrame = Math.floor(wordStartMs * fps / 1000);
+    const wordEndFrame = Math.floor(wordEndMs * fps / 1000);
+    const frameDiff = frame - wordStartFrame;
+    
+    // Configuration du spring pour une animation naturelle
     const springConfig = {
       damping: 12,
       stiffness: 200,
@@ -103,14 +179,16 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     };
 
     const springValue = spring({
-      frame: Math.max(0, frame - wordStartFrame),
+      frame: Math.max(0, frameDiff),
       fps,
       config: springConfig,
     });
 
+    // Durée d'animation convertie en frames
     const animSpeed = style.animationDuration || 0.15;
     const speedFrames = Math.max(6, Math.floor(animSpeed * fps));
 
+    // Progress avec easing pour une animation fluide
     const progress = interpolate(
       frame,
       [wordStartFrame, wordStartFrame + speedFrames],
@@ -121,6 +199,8 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
         extrapolateRight: 'clamp',
       }
     );
+
+    const animationType = style.wordHighlight || 'zoom';
 
     switch (animationType) {
       case 'zoom':
@@ -183,7 +263,8 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     }
   };
 
-  const getTextStyle = (isActive: boolean, word?: any, wordStartFrame?: number, wordEndFrame?: number): React.CSSProperties => {
+  // Style de texte optimisé avec animations fluides
+  const getTextStyle = (isActive: boolean, wordStartMs: number, wordEndMs: number, word?: any): React.CSSProperties => {
     const textStyle: React.CSSProperties = {
       display: 'inline-block',
       color: style.color || '#FFFFFF',
@@ -193,12 +274,13 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
       fontWeight: style.fontWeight || 'bold',
       textTransform: style.textTransform || 'none',
       marginRight: `${Math.max(0.15, (style.wordSpacing || 0.12) * 2)}em`,
-      transition: 'all 0.06s cubic-bezier(0.23, 1, 0.32, 1)',
+      // Pas de transition CSS qui interfère avec Remotion
+      position: 'relative',
     };
 
     // 🚀 Application des animations optimisées
-    if (isActive && style.animation && wordStartFrame && wordEndFrame) {
-      const animation = getWordAnimation(wordStartFrame, wordEndFrame, style.wordHighlight || 'zoom');
+    if (isActive && style.animation) {
+      const animation = getWordAnimation(wordStartMs, wordEndMs);
       
       if (animation.opacity !== undefined) textStyle.opacity = animation.opacity;
       if (animation.transform !== undefined) textStyle.transform = animation.transform;
@@ -219,11 +301,17 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
       } else {
         switch (style.wordHighlight) {
           case 'background':
+            // Animation de zoom fluide pour le background
+            const animDuration = (style.animationDuration || 0.15) * 1000;
+            const progress = Math.min(1, Math.max(0, (timeInMs - wordStartMs) / animDuration));
+            const easeProgress = Easing.bezier(0.25, 0.1, 0.25, 1)(progress);
+            
             textStyle.backgroundColor = style.wordBackgroundColor || '#FF6B35';
             textStyle.color = '#FFFFFF';
-            textStyle.padding = '4px 10px';
+            textStyle.padding = `${4 + easeProgress * 2}px ${10 + easeProgress * 4}px`;
             textStyle.borderRadius = '8px';
-            textStyle.boxShadow = '0 3px 8px rgba(0,0,0,0.4)';
+            textStyle.boxShadow = `0 ${3 + easeProgress * 5}px ${8 + easeProgress * 8}px rgba(0,0,0,${0.3 + easeProgress * 0.2})`;
+            textStyle.transform = `scale(${1 + easeProgress * 0.12}) translateY(${-easeProgress * 2}px)`;
             break;
             
           case 'glow':
@@ -253,7 +341,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
               medium: '5px',
               large: '8px',
             };
-            return strokeSizes[style.strokeWeight];
+            return strokeSizes[style.strokeWeight] || '3px';
           })();
       
       textStyle.WebkitTextStroke = `${strokeSize} ${style.strokeColor || '#000000'}`;
@@ -300,6 +388,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     return textStyle;
   };
 
+  // Background style avec support pour plusieurs lignes
   const getBackgroundStyle = (): React.CSSProperties => {
     if (!style.backgroundColor || 
         style.backgroundColor === 'transparent' || 
@@ -322,61 +411,20 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
       borderRadius: `${style.borderRadius || 8}px`,
       display: 'inline-block',
       backdropFilter: 'blur(4px)',
+      maxWidth: '90%',
     };
   };
 
-  // 🎯 Traitement des émojis DIRECT (pas de service externe pour éviter les erreurs de rendu)
-  const processText = (text: string): string => {
-    let processedText = text;
-
-    if (!style.punctuation) {
-      processedText = processedText.replace(/[.,!?;:]/g, '');
-    }
-
-    if (style.autoEmojis) {
-      // 🚀 Dictionnaire d'émojis intégré directement
-      const emojiMap: Record<string, string> = {
-        // Émotions de base
-        'happy': '😊', 'heureux': '😀', 'content': '😊', 'joie': '😄',
-        'sad': '😢', 'triste': '😢', 'malheureux': '😔', 'pleure': '😭',
-        'love': '❤️', 'amour': '❤️', 'aimer': '💕', 'coeur': '💖',
-        'laugh': '😂', 'rire': '😂', 'drôle': '🤣', 'mdr': '😆',
-        'wow': '😮', 'incroyable': '😲', 'amazing': '🤩', 'surpris': '😯',
-        
-        // Actions et objets
-        'super': '🎉', 'génial': '🎉', 'fantastique': '✨', 'excellent': '👌',
-        'merci': '🙏', 'thanks': '🙏', 'thank': '🙏', 'gratitude': '🙏',  
-        'question': '❓', 'pourquoi': '🤔', 'comment': '🤔', 'quoi': '❓',
-        'idée': '💡', 'idea': '💡', 'penser': '💭', 'réflexion': '🧠',
-        'attention': '⚠️', 'warning': '⚠️', 'danger': '⚠️', 'alerte': '🚨',
-        'bravo': '👏', 'félicitations': '🎊', 'congrats': '🎉', 'applaudir': '👏',
-        
-        // Nouveaux emojis tendance
-        'fire': '🔥', 'feu': '🔥', 'hot': '🔥', 'chaud': '🔥',
-        'cool': '😎', 'classe': '😎', 'stylé': '😎', 'swag': '😎',
-        'money': '💰', 'argent': '💰', 'cash': '💵', 'riche': '💸',
-        'strong': '💪', 'fort': '💪', 'muscle': '💪', 'puissant': '💪',
-        'fast': '⚡', 'rapide': '⚡', 'speed': '💨', 'vite': '💨',
-        'boom': '💥', 'explosion': '💥', 'bang': '💥', 'impact': '💥',
-        
-        // Réseaux sociaux
-        'like': '👍', 'dislike': '👎', 'follow': '➕', 'share': '🔄',
-        'viral': '📈', 'trending': '🔥', 'views': '👀', 'subscribers': '📊',
-      };
-
-      Object.entries(emojiMap).forEach(([word, emoji]) => {
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        processedText = processedText.replace(regex, `$& ${emoji}`);
-      });
-    }
-
-    return processedText;
-  };
-
-  // 🎯 Animation des émojis si activée
+  // 🎯 Animation des émojis
   const getEmojiStyle = (): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = {
+      display: 'inline-block',
+      fontSize: '10em', // Emojis plus grands
+      verticalAlign: 'middle',
+    };
+
     if (!style.emojiAnimation) {
-      return { display: 'inline-block' };
+      return baseStyle;
     }
 
     // Animation de rotation légère pour les émojis
@@ -384,10 +432,9 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     const scale = 1 + Math.sin(frame * 0.15) * 0.1;
 
     return {
-      display: 'inline-block',
+      ...baseStyle,
       transform: `rotate(${rotation}deg) scale(${scale})`,
       transformOrigin: 'center',
-      marginLeft: '0.2em',
     };
   };
 
@@ -413,13 +460,24 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
     return parts;
   };
 
+  // Traitement du texte pour les sous-titres sans mots
+  const processText = (text: string): string => {
+    let processedText = text;
+
+    if (!style.punctuation) {
+      processedText = processedText.replace(/[.,!?;:]/g, '');
+    }
+
+    return processedText;
+  };
+
   return (
     <AbsoluteFill>
       {/* Vidéo de fond */}
       {videoUrl ? (
         <Video
           src={videoUrl}
-          style={getVideoStyle()}
+          style={videoStyle}
           volume={1}
           muted={false}
         />
@@ -443,38 +501,60 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
         </AbsoluteFill>
       )}
 
-      {/* Sous-titres avec émojis animés */}
+      {/* Sous-titres avec animations fluides et émojis */}
       {currentSub && (
         <div style={getPositionStyle()}>
           <div style={getBackgroundStyle()}>
-            <div style={{ maxWidth: '90%', textAlign: 'center' }}>
-              {currentSub.words && currentSub.words.length > 0 ? (
-                currentSub.words.map((word, index) => {
-                  const wordStartFrame = Math.floor(word.start * fps);
-                  const wordEndFrame = Math.floor(word.end * fps);
-                  const isWordActive = frame >= wordStartFrame && frame <= wordEndFrame;
-                  
-                  const processedText = processText(word.text);
-                  const parts = separateTextAndEmojis(processedText);
-                  
-                  return (
-                    <span key={`${currentSub.id}-word-${index}`}>
-                      {parts.map((part, partIndex) => (
-                        <span key={`part-${partIndex}`}>
-                          {part.type === 'emoji' ? (
-                            <span style={getEmojiStyle()}>
-                              {part.content}
+            <div style={{ position: 'relative', textAlign: 'center', maxWidth: '90%' }}>
+              {processedWords.length > 0 ? (
+                <>
+                  {/* Mots du sous-titre avec animations précises */}
+                  <span style={{ display: 'inline-block' }}>
+                    {processedWords.map((word, index) => {
+                      const wordStartMs = word.start * 1000;
+                      const wordEndMs = word.end * 1000;
+                      const isWordActive = timeInMs >= wordStartMs && timeInMs <= wordEndMs;
+                      
+                      // Détection des émojis dans le mot
+                      const parts = separateTextAndEmojis(word.processedText);
+                      
+                      return (
+                        <span key={`${currentSub.id}-word-${index}`}>
+                          {parts.map((part, partIndex) => (
+                            <span key={`part-${partIndex}`}>
+                              {part.type === 'emoji' ? (
+                                <span style={getEmojiStyle()}>
+                                  {part.content}
+                                </span>
+                              ) : (
+                                <span style={getTextStyle(isWordActive, wordStartMs, wordEndMs, word)}>
+                                  {part.content}
+                                </span>
+                              )}
                             </span>
-                          ) : (
-                            <span style={getTextStyle(isWordActive, word, wordStartFrame, wordEndFrame)}>
-                              {part.content}
-                            </span>
-                          )}
+                          ))}
+                        </span>
+                      );
+                    })}
+                  </span>
+                  
+                  {/* Emojis en haut à droite de la ligne */}
+                  {lineEmojis.length > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '-12em',
+                      right: '-5em',
+                      display: 'flex',
+                      gap: '0.3em',
+                    }}>
+                      {lineEmojis.map((emoji, index) => (
+                        <span key={`line-emoji-${index}`} style={getEmojiStyle()}>
+                          {emoji}
                         </span>
                       ))}
                     </span>
-                  );
-                })
+                  )}
+                </>
               ) : (
                 // Traitement des émojis pour les sous-titres sans granularité de mots
                 (() => {
@@ -487,7 +567,7 @@ export const CaptionedVideo: React.FC<CaptionedVideoProps> = ({
                           {part.content}
                         </span>
                       ) : (
-                        <span style={getTextStyle(true)}>
+                        <span style={getTextStyle(true, 0, 0)}>
                           {part.content}
                         </span>
                       )}

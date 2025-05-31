@@ -1,350 +1,427 @@
-// src/app/profile/page.tsx - Page principale du profil
+// src/app/profile/page.tsx - Page de profil avec shadcn/ui
 'use client';
 
-import React, { useState } from 'react';
-import { DashboardHeader } from '@/components/DashboardHeader';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   User, 
   Mail, 
-  Calendar, 
   Crown, 
-  BarChart3, 
+  Calendar, 
   Video, 
-  Palette, 
+  Zap, 
   Settings,
-  Camera,
+  CreditCard,
+  BarChart3,
   Save,
-  Loader2
+  AlertCircle
 } from 'lucide-react';
-
-interface ProfileSection {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-}
-
-const sections: ProfileSection[] = [
-  { id: 'general', name: 'Informations générales', icon: <User className="h-4 w-4" /> },
-  { id: 'subscription', name: 'Abonnement', icon: <Crown className="h-4 w-4" /> },
-  { id: 'statistics', name: 'Statistiques', icon: <BarChart3 className="h-4 w-4" /> },
-  { id: 'presets', name: 'Mes presets', icon: <Palette className="h-4 w-4" /> },
-  { id: 'settings', name: 'Paramètres', icon: <Settings className="h-4 w-4" /> },
-];
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user, profile, updateProfile } = useAuth();
-  const [activeSection, setActiveSection] = useState('general');
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: profile?.name || '',
-    email: user?.email || '',
-  });
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
 
-  if (!user) return null;
+  // États du formulaire
+  const [name, setName] = useState(profile?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+    setName(profile?.name || '');
+    setEmail(user?.email || '');
+  }, [user, profile, router]);
+
+  const handleSaveProfile = async () => {
+    setIsLoading(true);
+    try {
+      await updateProfile({ name });
+      toast.success('Profil mis à jour avec succès !');
+    } catch (error) {
+      toast.error('Erreur lors de la mise à jour du profil');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!user) {
+    return <div>Redirection...</div>;
+  }
 
   const displayName = profile?.name || user.email?.split('@')[0] || 'Utilisateur';
-  const initials = displayName
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = displayName.slice(0, 2).toUpperCase();
+  const joinDate = new Date(user.created_at || Date.now()).toLocaleDateString('fr-FR');
 
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      const { error } = await updateProfile({ name: formData.name });
-      if (error) throw error;
-      
-      toast.success('✅ Profil mis à jour');
-    } catch (error: any) {
-      toast.error('Erreur: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getSubscriptionBadge = (subscription: string) => {
-    const badges = {
-      free: { color: 'bg-gray-100 text-gray-800', icon: null },
-      pro: { color: 'bg-blue-100 text-blue-800', icon: <BarChart3 className="h-3 w-3" /> },
-      premium: { color: 'bg-purple-100 text-purple-800', icon: <Crown className="h-3 w-3" /> },
-    };
-    
-    const badge = badges[subscription as keyof typeof badges] || badges.free;
-    
-    return (
-      <Badge className={`${badge.color} flex items-center gap-1`}>
-        {badge.icon}
-        {subscription.toUpperCase()}
-      </Badge>
-    );
-  };
-
-  const renderContent = () => {
-    switch (activeSection) {
-      case 'general':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Informations personnelles
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Photo de profil */}
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <Avatar className="h-20 w-20">
-                    <AvatarImage src={profile?.avatar_url || ''} alt={displayName} />
-                    <AvatarFallback className="text-lg bg-blue-500 text-white">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <Button
-                    size="sm"
-                    className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">{displayName}</h3>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                  {getSubscriptionBadge(profile?.subscription || 'free')}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Formulaire */}
-              <div className="grid gap-4 max-w-md">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nom complet</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Votre nom"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    value={formData.email}
-                    disabled
-                    className="bg-gray-50 dark:bg-gray-800"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    L'email ne peut pas être modifié
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Membre depuis</Label>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    {new Date(profile?.created_at || user.created_at || Date.now()).toLocaleDateString('fr-FR', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </div>
-                </div>
-
-                <Button onClick={handleSave} disabled={loading} className="w-fit">
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sauvegarde...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Sauvegarder
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case 'subscription':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Crown className="h-5 w-5" />
-                Abonnement et facturation
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg">
-                <Crown className="h-12 w-12 mx-auto text-purple-500 mb-4" />
-                <h3 className="font-semibold text-lg mb-2">Plan {(profile?.subscription || 'free').toUpperCase()}</h3>
-                
-                {profile?.subscription === 'free' && (
-                  <>
-                    <p className="text-muted-foreground mb-4">
-                      3 vidéos par mois • Qualité standard • Support communautaire
-                    </p>
-                    <Button className="bg-gradient-to-r from-blue-500 to-purple-500">
-                      Upgrader vers Pro
-                    </Button>
-                  </>
-                )}
-                
-                {profile?.subscription === 'pro' && (
-                  <p className="text-muted-foreground">
-                    20 vidéos par mois • Qualité HD • Support prioritaire
-                  </p>
-                )}
-                
-                {profile?.subscription === 'premium' && (
-                  <p className="text-muted-foreground">
-                    100 vidéos par mois • Qualité 4K • Support VIP • API access
-                  </p>
-                )}
-              </div>
-
-              {/* Plans disponibles */}
-              <div className="grid gap-4 md:grid-cols-3">
-                {[
-                  { 
-                    name: 'Free', 
-                    price: '0€', 
-                    videos: '3', 
-                    features: ['Qualité standard', 'Support communautaire', '8 animations'],
-                    current: (profile?.subscription || 'free') === 'free'
-                  },
-                  { 
-                    name: 'Pro', 
-                    price: '9€', 
-                    videos: '20', 
-                    features: ['Qualité HD', 'Support prioritaire', 'Presets avancés'],
-                    current: profile?.subscription === 'pro'
-                  },
-                  { 
-                    name: 'Premium', 
-                    price: '29€', 
-                    videos: '100', 
-                    features: ['Qualité 4K', 'Support VIP', 'API access', 'Fonctions beta'],
-                    current: profile?.subscription === 'premium'
-                  },
-                ].map((plan, index) => (
-                  <Card key={index} className={plan.current ? 'ring-2 ring-blue-500' : ''}>
-                    <CardHeader className="text-center">
-                      <CardTitle className="text-lg">{plan.name}</CardTitle>
-                      <div className="text-2xl font-bold">{plan.price}<span className="text-sm font-normal">/mois</span></div>
-                      <p className="text-sm text-muted-foreground">{plan.videos} vidéos/mois</p>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-2 text-sm">
-                        {plan.features.map((feature, i) => (
-                          <li key={i} className="flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 bg-green-500 rounded-full" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                      <Button 
-                        className="w-full mt-4" 
-                        variant={plan.current ? 'secondary' : 'default'}
-                        disabled={plan.current}
-                      >
-                        {plan.current ? 'Plan actuel' : 'Choisir ce plan'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case 'statistics':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Statistiques d'utilisation
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[
-                  { label: 'Vidéos créées', value: '12', icon: <Video className="h-4 w-4" />, color: 'text-blue-500' },
-                  { label: 'Temps de traitement', value: '2h 34m', icon: <BarChart3 className="h-4 w-4" />, color: 'text-green-500' },
-                  { label: 'Presets créés', value: '5', icon: <Palette className="h-4 w-4" />, color: 'text-purple-500' },
-                  { label: 'Votes reçus', value: '28', icon: <Crown className="h-4 w-4" />, color: 'text-orange-500' },
-                ].map((stat, index) => (
-                  <Card key={index}>
-                    <CardContent className="p-4 text-center">
-                      <div className={`${stat.color} mb-2`}>{stat.icon}</div>
-                      <div className="text-2xl font-bold">{stat.value}</div>
-                      <div className="text-sm text-muted-foreground">{stat.label}</div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      default:
-        return (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <p className="text-muted-foreground">Section en développement...</p>
-            </CardContent>
-          </Card>
-        );
-    }
+  // Stats factices pour la démo
+  const stats = {
+    videosCreated: 12,
+    totalDuration: 45.6,
+    creditsUsed: 8,
+    creditsRemaining: 12,
   };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <DashboardHeader 
         title="Profil utilisateur"
-        subtitle={`Gérez votre compte ${displayName}`}
+        subtitle={`Gérez votre compte et vos préférences`}
+        showBackButton
+        onBack={() => router.push('/')}
       />
 
-      <div className="container mx-auto px-6 py-8">
-        <div className="flex gap-8">
-          {/* Sidebar navigation */}
-          <div className="w-64 space-y-2">
-            {sections.map((section) => (
-              <Button
-                key={section.id}
-                variant={activeSection === section.id ? 'default' : 'ghost'}
-                onClick={() => setActiveSection(section.id)}
-                className="w-full justify-start"
-              >
-                {section.icon}
-                {section.name}
-              </Button>
-            ))}
-          </div>
+      <div className="max-w-4xl mx-auto p-6">
+        {/* Header de profil */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-6">
+              <Avatar className="h-20 w-20">
+                <AvatarFallback className="bg-blue-600 text-white text-xl font-bold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  {displayName}
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400 mb-2">{email}</p>
+                
+                <div className="flex items-center gap-3">
+                  <Badge variant={profile?.subscription === 'pro' ? 'default' : 'secondary'}>
+                    <Crown className="h-3 w-3 mr-1" />
+                    {profile?.subscription?.toUpperCase() || 'FREE'}
+                  </Badge>
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <Calendar className="h-4 w-4 mr-1" />
+                    Membre depuis le {joinDate}
+                  </div>
+                </div>
+              </div>
 
-          {/* Main content */}
-          <div className="flex-1">
-            {renderContent()}
-          </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {stats.creditsRemaining}
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Crédits restants</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Statistiques rapides */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Vidéos créées</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.videosCreated}</p>
+                </div>
+                <Video className="h-8 w-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Durée totale</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalDuration}min</p>
+                </div>
+                <BarChart3 className="h-8 w-8 text-green-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Crédits utilisés</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.creditsUsed}</p>
+                </div>
+                <Zap className="h-8 w-8 text-orange-500" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Onglets */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="profile">
+              <User className="h-4 w-4 mr-2" />
+              Profil
+            </TabsTrigger>
+            <TabsTrigger value="subscription">
+              <Crown className="h-4 w-4 mr-2" />
+              Abonnement
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings className="h-4 w-4 mr-2" />
+              Paramètres
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Onglet Profil */}
+          <TabsContent value="profile">
+            <Card>
+              <CardHeader>
+                <CardTitle>Informations personnelles</CardTitle>
+                <CardDescription>
+                  Modifiez vos informations de profil
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nom complet</Label>
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Votre nom"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      value={email}
+                      disabled
+                      className="bg-gray-50 dark:bg-gray-800"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      L'email ne peut pas être modifié
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={handleSaveProfile} 
+                    disabled={isLoading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isLoading ? 'Sauvegarde...' : 'Sauvegarder'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Onglet Abonnement */}
+          <TabsContent value="subscription">
+            <Card>
+              <CardHeader>
+                <CardTitle>Gestion de l'abonnement</CardTitle>
+                <CardDescription>
+                  Gérez votre plan et vos crédits
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Plan actuel */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        Plan {profile?.subscription?.toUpperCase() || 'FREE'}
+                      </h3>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {profile?.subscription === 'pro' 
+                          ? 'Créations illimitées et fonctionnalités avancées' 
+                          : 'Plan gratuit avec crédits limités'
+                        }
+                      </p>
+                    </div>
+                    <Badge variant={profile?.subscription === 'pro' ? 'default' : 'secondary'} className="text-lg px-4 py-2">
+                      <Crown className="h-4 w-4 mr-2" />
+                      {profile?.subscription?.toUpperCase() || 'FREE'}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Crédits utilisés ce mois</p>
+                      <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{stats.creditsUsed}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Crédits restants</p>
+                      <p className="text-xl font-bold text-green-600 dark:text-green-400">{stats.creditsRemaining}</p>
+                    </div>
+                  </div>
+
+                  {profile?.subscription !== 'pro' && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Passez au plan Pro pour des crédits illimités et des fonctionnalités avancées !
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
+                {/* Plans disponibles */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className={profile?.subscription === 'free' ? 'ring-2 ring-blue-500' : ''}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        Plan Free
+                        <Badge variant="secondary">Actuel</Badge>
+                      </CardTitle>
+                      <CardDescription>Parfait pour commencer</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold mb-4">0€<span className="text-sm font-normal">/mois</span></div>
+                      <ul className="space-y-2 text-sm">
+                        <li>✅ 20 crédits par mois</li>
+                        <li>✅ Qualité 60 FPS</li>
+                        <li>✅ IA de transcription</li>
+                        <li>❌ Exports illimités</li>
+                        <li>❌ Presets avancés</li>
+                      </ul>
+                    </CardContent>
+                  </Card>
+
+                  <Card className={profile?.subscription === 'pro' ? 'ring-2 ring-orange-500' : 'border-orange-200'}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        Plan Pro
+                        <Badge className="bg-orange-500">
+                          <Crown className="h-3 w-3 mr-1" />
+                          Recommandé
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>Pour les créateurs professionnels</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-3xl font-bold mb-4">19€<span className="text-sm font-normal">/mois</span></div>
+                      <ul className="space-y-2 text-sm">
+                        <li>✅ Crédits illimités</li>
+                        <li>✅ Qualité 60 FPS</li>
+                        <li>✅ IA de transcription avancée</li>
+                        <li>✅ Exports illimités</li>
+                        <li>✅ Presets premium</li>
+                        <li>✅ Support prioritaire</li>
+                      </ul>
+                      <Button className="w-full mt-4 bg-orange-500 hover:bg-orange-600">
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        {profile?.subscription === 'pro' ? 'Gérer l\'abonnement' : 'Passer au Pro'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Onglet Paramètres */}
+          <TabsContent value="settings">
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Préférences d'export</CardTitle>
+                  <CardDescription>
+                    Configurez vos paramètres par défaut
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Mode de rendu par défaut</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Choisissez votre mode de rendu préféré</p>
+                    </div>
+                    <select className="border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700">
+                      <option>Optimisé (3x plus rapide)</option>
+                      <option>Standard (qualité max)</option>
+                    </select>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Qualité vidéo par défaut</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Résolution de sortie</p>
+                    </div>
+                    <select className="border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700">
+                      <option>1080x1920 (TikTok/Instagram)</option>
+                      <option>1920x1080 (YouTube)</option>
+                      <option>720x1280 (Stories)</option>
+                    </select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notifications</CardTitle>
+                  <CardDescription>
+                    Gérez vos préférences de notification
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Notifications d'export</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Recevoir un email quand l'export est terminé</p>
+                    </div>
+                    <input type="checkbox" className="rounded" defaultChecked />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Nouveautés produit</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Être informé des nouvelles fonctionnalités</p>
+                    </div>
+                    <input type="checkbox" className="rounded" defaultChecked />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Zone de danger</CardTitle>
+                  <CardDescription>
+                    Actions irréversibles sur votre compte
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="border border-red-200 dark:border-red-800 rounded-lg p-4">
+                    <h4 className="font-semibold text-red-600 dark:text-red-400 mb-2">Supprimer le compte</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      Cette action supprimera définitivement votre compte et toutes vos données.
+                    </p>
+                    <Button variant="destructive" size="sm">
+                      Supprimer mon compte
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

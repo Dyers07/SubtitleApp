@@ -1,4 +1,4 @@
-// src/components/v2/subtitle-customizer.tsx
+// src/components/v2/subtitle-customizer.tsx - Headers avec gradient uniforme
 'use client';
 
 import React, {
@@ -11,9 +11,6 @@ import { VideoPlayer } from './video-player';
 import { CustomizationPanel } from './customization-panel';
 import { EditCaptions } from './edit-captions';
 import { StylePresets } from './style-presets';
-import { Logo } from './logo';
-import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
   VideoProject,
@@ -51,7 +48,6 @@ export function SubtitleCustomizer({
   const [displayWords, setDisplayWords] = useState(3);
   const [style, setStyle] = useState<SubtitleStyle>({
     ...project.style,
-    // 🚀 Assurer 60 FPS par défaut
     animationDuration: project.style.animationDuration || 0.15,
   });
   const [segments, setSegments] = useState<SubtitleSegment[]>(() => {
@@ -71,7 +67,7 @@ export function SubtitleCustomizer({
   // 🚀 Assurer que le projet est toujours en 60 FPS
   const projectWith60FPS = useMemo(() => ({
     ...project,
-    fps: 60, // Force 60 FPS
+    fps: 60,
     style,
     subtitles: segments.map(backToSubtitle),
     brightness,
@@ -133,7 +129,6 @@ export function SubtitleCustomizer({
     };
     setStyle(newStyle);
     
-    // 🚀 Toast de feedback visuel
     if (Math.abs(offsetY - 50) < 5) {
       toast.success('📍 Sous-titres centrés', { duration: 1000 });
     } else if (offsetY < 25) {
@@ -142,7 +137,6 @@ export function SubtitleCustomizer({
       toast.info('⬇️ Position basse', { duration: 1000 });
     }
     
-    // Mise à jour du projet
     const updatedProject = {
       ...projectWith60FPS,
       style: newStyle,
@@ -150,134 +144,19 @@ export function SubtitleCustomizer({
     onProjectUpdate(updatedProject);
   }, [style, projectWith60FPS, onProjectUpdate]);
 
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
+  useEffect(() => {
+    if (isExporting) {
       const startTime = Date.now();
       setExportStartTime(startTime);
-      onStartExport();
       
-      // 🎉 Toast d'info avec détails 60 FPS
       toast.info('🚀 Démarrage du rendu 60 FPS…', {
         description: `Qualité maximale • ${projectWith60FPS.width}x${projectWith60FPS.height} • 60fps`,
         duration: 3000,
       });
-      onExportProgress(0);
-
-      // 🎯 Estimation plus précise pour 60 FPS (plus long)
-      const estimatedDuration = projectWith60FPS.videoDuration * 3 * 1000; // 3x la durée pour 60fps
       
-      // Progression réaliste avec ralentissement vers la fin
-      let currentProgress = 0;
-      const progressInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progressFactor = elapsed / estimatedDuration;
-        
-        // Courbe de progression réaliste pour 60 FPS
-        if (progressFactor < 0.6) {
-          currentProgress = Math.min(progressFactor * 70, 70);
-        } else if (progressFactor < 0.85) {
-          currentProgress = Math.min(70 + ((progressFactor - 0.6) / 0.25) * 20, 90);
-        } else {
-          // Ralentir après 90% (finalisation 60 FPS)
-          currentProgress = Math.min(90 + ((progressFactor - 0.85) / 0.15) * 5, 95);
-        }
-        
-        onExportProgress(Math.round(currentProgress));
-        
-        // Calculer le temps restant
-        if (currentProgress > 10) {
-          const timePerPercent = elapsed / currentProgress;
-          const remaining = Math.round(((100 - currentProgress) * timePerPercent) / 1000);
-          setEstimatedTimeRemaining(remaining);
-        }
-      }, 1000); // Mise à jour chaque seconde
-
-      // Projet avec effets visuels et 60 FPS
-      const finalProject = {
-        ...projectWith60FPS,
-        fps: 60, // 🎯 Garantir 60 FPS
-        style: {
-          ...style,
-          // Optimiser les animations pour 60 FPS
-          animationDuration: style.animationDuration || 0.15,
-        },
-      };
-
-      console.log('🚀 Sending 60 FPS project for render:', {
-        fps: finalProject.fps,
-        duration: finalProject.videoDuration,
-        subtitles: finalProject.subtitles.length,
-        effects: { brightness, contrast, saturation }
-      });
-
-      const response = await fetch('/api/render', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(finalProject),
-      });
-
-      clearInterval(progressInterval);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.success || !data.downloadUrl) {
-        throw new Error(data.error || 'Aucune URL de téléchargement reçue');
-      }
-
-      onExportProgress(100);
-      setEstimatedTimeRemaining(0);
-
-      // 🎉 Toast de succès avec téléchargement unique
-      toast.success('🎉 Export 60 FPS terminé !', {
-        description: `Vidéo "${finalProject.id}" rendue en qualité maximale`,
-        action: {
-          label: '📥 Télécharger',
-          onClick: () => {
-            const link = document.createElement('a');
-            link.href = data.downloadUrl;
-            link.download = `video-60fps-${finalProject.id}.mp4`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          },
-        },
-        duration: 10000,
-      });
-
-      // 🚀 UN SEUL téléchargement automatique après 2 secondes
-      setTimeout(() => {
-        const link = document.createElement('a');
-        link.href = data.downloadUrl;
-        link.download = `video-60fps-${finalProject.id}.mp4`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        console.log('✅ Téléchargement unique effectué');
-      }, 2000);
-
-    } catch (err) {
-      console.error('Export error:', err);
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      toast.error(`❌ Erreur export 60 FPS : ${message}`, {
-        description: 'Vérifiez la console pour plus de détails',
-        duration: 8000,
-      });
-      onExportProgress(0);
-      setEstimatedTimeRemaining(null);
-    } finally {
-      setIsExporting(false);
-      setExportStartTime(null);
+      onExportProgress?.(0);
     }
-  };
+  }, [isExporting, projectWith60FPS, onExportProgress]);
 
   const [activeTab, setActiveTab] = useState<'customize' | 'presets'>('customize');
   const customization = { ...style, displayWords };
@@ -290,59 +169,36 @@ export function SubtitleCustomizer({
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="flex justify-center items-center py-3 px-6 border-b bg-white relative">
-        <div className="flex items-center">
-          <Logo />
-          <div className="text-gray-500 text-sm ml-2">Alpha 1.0</div>
-          {/* 🎯 Indicateur 60 FPS */}
-          <div className="ml-4 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-bold">
-            60 FPS ⚡
-          </div>
-        </div>
-        <Button
-          className="absolute right-6 bg-[#b978fd] hover:bg-[#a865ea] text-white px-3 py-1.5 font-semibold disabled:opacity-50 transition-all duration-200 cursor-pointer"
-          onClick={handleExport}
-          disabled={isExporting}
-        >
-          <Download className="h-4 w-4 mr-1.5" />
-          {isExporting ? (
-            <span className="flex items-center gap-2">
-              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Export 60 FPS...
-            </span>
-          ) : (
-            'Exporter 60 FPS'
-          )}
-        </Button>
-      </header>
-
-      <div className="flex-1 flex justify-center items-center px-2 py-1">
-        <div className="flex gap-4 w-full max-w-[1400px]">
-          {/* Panel */}
-          <div className="w-[32%]">
-            <div className="bg-white h-[85vh] border rounded-lg overflow-hidden shadow-sm">
-              <div className="border-b bg-gradient-to-r from-blue-50 to-purple-50">
-                <div className="flex">
-                  {(['customize','presets'] as const).map(tab => (
-                    <button
-                      key={tab}
-                      className={`flex-1 px-4 py-3 text-sm font-semibold transition-all relative ${
-                        activeTab===tab
-                          ? 'text-blue-600 bg-white rounded-t-lg shadow-sm border-b-2 border-blue-600 -mb-px z-10'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                      }`}
-                      onClick={()=>setActiveTab(tab)}
-                    >
-                      <span className="flex items-center justify-center gap-2">
-                        {tab==='customize' ? '🎨' : '🎭'}
-                        {tab==='customize' ? 'Customize' : 'Presets'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+    <div className="flex-1 flex justify-center items-start px-1 py-0 bg-gray-50 dark:bg-gray-900">
+      <div className="flex gap-3 w-full max-w-[1400px]">
+        
+        {/* ✅ Panel de personnalisation avec header gradient */}
+        <div className="w-[32%]">
+          <div className="bg-white dark:bg-gray-800 h-[87vh] border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            {/* ✅ HEADER UNIFORME avec gradient - Hauteur fixe de 56px */}
+            <div className="h-14 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 flex-shrink-0">
+              <div className="flex h-full">
+                {(['customize','presets'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    className={`flex-1 px-4 py-3 text-sm font-semibold transition-all relative flex items-center justify-center ${
+                      activeTab===tab
+                        ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border-blue-600 dark:border-blue-400 -mb-px z-10'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-700/50'
+                    }`}
+                    onClick={()=>setActiveTab(tab)}
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      {tab==='customize' ? '🎨' : '🎭'}
+                      {tab==='customize' ? 'Customize' : 'Presets'}
+                    </span>
+                  </button>
+                ))}
               </div>
+            </div>
 
+            {/* ✅ Contenu avec hauteur calculée */}
+            <div className="h-[calc(87vh-3.5rem)] overflow-hidden">
               {activeTab==='customize'
                 ? <CustomizationPanel style={customization as any} onStyleChange={handleCustomizationChange} />
                 : <StylePresets 
@@ -352,31 +208,31 @@ export function SubtitleCustomizer({
               }
             </div>
           </div>
+        </div>
 
-          {/* Lecteur avec drag des sous-titres */}
-          <div className="w-[36%]">
-            <div className="bg-white h-[85vh] border rounded-lg overflow-hidden">
-              <VideoPlayer
-                project={projectWith60FPS}
-                onReset={onReset}
-                onTimeUpdate={setCurrentTime}
-                onEffectsChange={{ setBrightness, setContrast, setSaturation }}
-                onSubtitlePositionChange={handleSubtitlePositionChange}
-              />
-            </div>
+        {/* ✅ Lecteur vidéo */}
+        <div className="w-[36%]">
+          <div className="bg-white dark:bg-gray-800 h-[87vh] border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            <VideoPlayer
+              project={projectWith60FPS}
+              onReset={onReset}
+              onTimeUpdate={setCurrentTime}
+              onEffectsChange={{ setBrightness, setContrast, setSaturation }}
+              onSubtitlePositionChange={handleSubtitlePositionChange}
+            />
           </div>
+        </div>
 
-          {/* Éditeur */}
-          <div className="w-[32%]">
-            <div className="bg-white h-[85vh] border rounded-lg overflow-hidden">
-              <EditCaptions
-                segments={segments}
-                currentTime={currentTime}
-                onUpdateSubtitle={updateSegment}
-                onDeleteSubtitle={(id) => updateSegment(id, { text: '' })}
-                onMoveToNext={() => {}}
-              />
-            </div>
+        {/* ✅ Éditeur de légendes */}
+        <div className="w-[32%]">
+          <div className="bg-white dark:bg-gray-800 h-[87vh] border border-gray-200 dark:border-gray-700  overflow-hidden shadow-sm">
+            <EditCaptions
+              segments={segments}
+              currentTime={currentTime}
+              onUpdateSubtitle={updateSegment}
+              onDeleteSubtitle={(id) => updateSegment(id, { text: '' })}
+              onMoveToNext={() => {}}
+            />
           </div>
         </div>
       </div>

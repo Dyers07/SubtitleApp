@@ -9,11 +9,11 @@ import { randomUUID } from 'crypto';
  */
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // ✅ Promise ajouté pour Next.js 15
 ) {
   try {
-    /* ─ 1. Sécuriser l’ID ─────────────────────────────────────────────── */
-    const { id } = params;
+    /* ─ 1. Sécuriser l'ID ─────────────────────────────────────────────── */
+    const { id } = await params; // ✅ await ajouté
     if (!id) {
       return NextResponse.json(
         { error: "ID manquant dans l'URL" },

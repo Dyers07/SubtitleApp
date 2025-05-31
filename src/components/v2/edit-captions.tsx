@@ -1,4 +1,4 @@
-// src/components/v2/edit-captions.tsx
+// src/components/v2/edit-captions.tsx - Version corrigée avec timing optimisé
 'use client';
 
 import React, { useState } from 'react';
@@ -120,13 +120,14 @@ export function EditCaptions({
     return currentTime >= segment.startTime && currentTime <= segment.endTime;
   };
 
+  // 🚀 CORRECTION: Style optimisé avec transition ultra-rapide
   const getWordStyle = (word: Word, isActive: boolean) => {
     const baseStyle = {
       cursor: 'pointer',
       padding: '2px 4px',
       borderRadius: '3px',
       margin: '0 1px',
-      transition: 'all 0.15s ease', // Plus fluide
+      transition: 'all 0.05s ease', // ✅ CORRIGÉ: 0.05s au lieu de 0.15s
       fontSize: '14px',
       display: 'inline-block',
     };
@@ -136,7 +137,7 @@ export function EditCaptions({
         ...baseStyle,
         backgroundColor: 'rgba(59, 130, 246, 0.25)',
         color: '#1e40af',
-        transform: 'scale(1.03)', // Légèrement plus prononcé
+        transform: 'scale(1.02)', // Légèrement réduit pour plus de fluidité
         fontWeight: '600',
         boxShadow: '0 1px 3px rgba(59, 130, 246, 0.3)',
       };
@@ -171,27 +172,24 @@ export function EditCaptions({
 
   return (
     <>
-      {/* 🎯 Header uniforme avec précision */}
-      <div className="border-b bg-gradient-to-r from-blue-50 to-purple-50 px-3 py-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">✏️ Edit Captions</span>
-            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-bold">
-              60fps
-            </span>
-          </div>
-          
-          {/* 🚀 Affichage de la précision */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600">Précision:</span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getConfidenceColor(averageConfidence / 100)}`}>
-              {averageConfidence.toFixed(1)}%
-            </span>
-          </div>
+      {/* 🎯 Header uniforme avec précision et rond animé */}
+      <div className="h-14 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 flex items-center justify-between px-4 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_5px_rgba(74,222,128,0.8)]"></div>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Éditeur</span>
+          <div className="text-xs text-gray-500 dark:text-gray-400">({segments.length})</div>
+        </div>
+        
+        {/* 🚀 Affichage de la précision */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600 dark:text-gray-400">Précision:</span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getConfidenceColor(averageConfidence / 100)}`}>
+            {averageConfidence.toFixed(1)}%
+          </span>
         </div>
       </div>
 
-      <div className="h-full overflow-y-auto p-4 space-y-3">
+      <div className="h-[calc(87vh-3.5rem)] overflow-y-auto p-4 space-y-3">
         {segments.map((segment) => {
           const isActive = isSegmentActive(segment);
           const isEditing = editingId === segment.id;
@@ -297,16 +295,17 @@ export function EditCaptions({
                 <div className="text-sm leading-relaxed">
                   {segment.words && segment.words.length > 0 ? (
                     segment.words.map((word, index) => {
+                      // 🚀 CORRECTION: Tolérance de timing pour compenser les micro-délais
                       const wordActive = isActive && 
-                        currentTime >= word.start && 
-                        currentTime <= word.end;
+                        currentTime >= (word.start - 0.02) && // ✅ Tolérance -20ms
+                        currentTime <= (word.end + 0.02);     // ✅ Tolérance +20ms
                       
                       return (
                         <span
                           key={`${segment.id}-word-${index}`}
                           style={getWordStyle(word, wordActive)}
                           onClick={() => handleWordClick(segment.id, index, word)}
-                          className="hover:bg-gray-100 hover:shadow-sm transition-all duration-150"
+                          className="hover:bg-gray-100 hover:shadow-sm transition-all duration-75" // ✅ Transition plus rapide
                           title={`Confiance: ${Math.round(word.confidence * 100)}%`}
                           onMouseEnter={(e) => {
                             if (!wordActive) {
